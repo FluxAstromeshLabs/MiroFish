@@ -710,7 +710,7 @@ Please generate JSON containing the following fields:
 3. age: Age as number (must be integer)
 4. gender: Gender, must be in English: "male" or "female"
 5. mbti: MBTI type (e.g., INTJ, ENFP)
-6. country: Country (use English, e.g., "US")
+6. country: Country
 7. profession: Profession
 8. interested_topics: Array of interested topics
 

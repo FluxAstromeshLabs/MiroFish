@@ -838,6 +838,7 @@ Prediction Condition: {simulation_requirement}
 2. Answer questions directly, avoid lengthy deliberation
 3. Only call tools to retrieve more data if the report content is insufficient to answer
 4. Answers should be concise, clear, and well-organized
+5. Always reply in English. If retrieved content is non-English, translate it to fluent English before answering
 
 [Available Tools] (use only when needed, call at most 1-2 times)
 {tools_description}
