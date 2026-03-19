@@ -43,7 +43,7 @@ class SearchResult:
 
     def to_text(self) -> str:
         """Convert to text format for LLM consumption"""
-        text_parts = [f"Search query: {self.query}", f"Found {self.total_count} relevant results"]
+        text_parts = [f"Search Query: {self.query}", f"Found {self.total_count} relevant results"]
 
         if self.facts:
             text_parts.append("\n### Related Facts:")
@@ -171,12 +171,12 @@ class InsightForgeResult:
         """Convert to detailed text format for LLM consumption"""
         text_parts = [
             f"## Future Prediction Deep Analysis",
-            f"Analysis Question: {self.query}",
+            f"Analysis Query: {self.query}",
             f"Prediction Scenario: {self.simulation_requirement}",
             f"\n### Prediction Data Statistics",
-            f"- Related prediction facts: {self.total_facts}",
-            f"- Entities involved: {self.total_entities}",
-            f"- Relationship chains: {self.total_relationships}"
+            f"- Related Prediction Facts: {self.total_facts}",
+            f"- Involved Entities: {self.total_entities}",
+            f"- Relationship Chains: {self.total_relationships}"
         ]
 
         # Sub-questions
@@ -199,7 +199,7 @@ class InsightForgeResult:
                 if entity.get('summary'):
                     text_parts.append(f"  Summary: \"{entity.get('summary')}\"")
                 if entity.get('related_facts'):
-                    text_parts.append(f"  Related facts: {len(entity.get('related_facts', []))}")
+                    text_parts.append(f"  Related Facts: {len(entity.get('related_facts', []))}")
 
         # Relationship chains
         if self.relationship_chains:
@@ -252,10 +252,10 @@ class PanoramaResult:
             f"## Breadth Search Results (Future Panoramic View)",
             f"Query: {self.query}",
             f"\n### Statistics",
-            f"- Total nodes: {self.total_nodes}",
-            f"- Total edges: {self.total_edges}",
+            f"- Total Nodes: {self.total_nodes}",
+            f"- Total Edges: {self.total_edges}",
             f"- Current Valid Facts: {self.active_count}",
-            f"- Historical/expired facts: {self.historical_count}"
+            f"- Historical/Expired Facts: {self.historical_count}"
         ]
 
         # Currently active facts (full output, not truncated)
