@@ -1,0 +1,9 @@
+name,direction,order_type,price,size,leverage
+fomo1,LONG,LIMIT,233.5,0.5,5
+buy,LONG,LIMIT,233.5,0.5,5
+master1,LONG,LIMIT,233.5,0.5,5
+trading session,LONG,LIMIT,233.0,1.0,2
+trades,LONG,LIMIT,233.0,1.0,5
+Futures Market,LONG,LIMIT,233.0,0.5,5
+fomo2,LONG,LIMIT,233.5,0.5,2
+master2,LONG,LIMIT,233.0,1.0,2

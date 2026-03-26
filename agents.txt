@@ -1,0 +1,6 @@
+1. master1 - Veteran quant trader, 10 years experience, manages a $5M crypto book. Calm, analytical, uses technical analysis and order book data.
+2. master2 - Former institutional desk trader turned independent. Disciplined risk manager. Rarely trades on emotion.
+3. fomo1 - 26-year-old crypto influencer with 200K followers. Constantly watching his phone. Jumps in on pumps based on Twitter hype.
+4. fomo2 - Office worker who started trading in 2024. Follows crypto YouTubers. Panic-buys after seeing green candles on his phone notifications.
+5. dummy1 - Retired electrician, first crypto trade. Heard about Bitcoin from his son. Completely random decisions.
+6. dummy2 - Nurse, bought Bitcoin at the peak in 2021 and sold at a loss. Trying again. Emotional, uncertain.
