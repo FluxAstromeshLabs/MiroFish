@@ -373,39 +373,46 @@ def _fallback_persona_decisions(llm, seed_text, id_to_profile, predict_hours):
     return forecasts
 
 
-def step5_interview_for_trades(base_url, simulation_id, llm, seed_text, session=None):
-    """Interview each agent for trade decisions, parse into structured data."""
-    print("[Step 5/5] Interviewing agents for trade decisions...")
+def step5_interview_for_trades(base_url, simulation_id, llm, seed_text, predict_hours, session=None):
+    """Interview each agent for price range forecast, return list of forecast dicts."""
+    print("[Step 5/5] Interviewing agents for price forecasts...")
 
     id_to_profile, platform = _get_agent_profiles(base_url, simulation_id, session=session)
     agent_count = len(id_to_profile)
 
-    # Check if simulation env is still alive for interview
     run_status = api("get", base_url, f"/api/simulation/{simulation_id}/run-status", session=session)
     env_alive = run_status.get("runner_status") not in ("stopped", "failed", "idle")
 
     if env_alive:
         print(f"  Found {agent_count} agents (platform: {platform}) — trying OASIS interview...")
         try:
-            decisions = _interview_agents(base_url, simulation_id, llm, seed_text,
+            forecasts = _interview_agents(base_url, simulation_id, seed_text, predict_hours,
                                           id_to_profile, platform, session=session)
-            if decisions:
-                return decisions
+            if forecasts:
+                return forecasts
         except Exception as e:
             print(f"  Interview failed: {e}")
 
-    return _fallback_persona_decisions(llm, seed_text, id_to_profile)
+    return _fallback_persona_decisions(llm, seed_text, id_to_profile, predict_hours)
 
 
 # ============== CSV Output ==============
 
-def write_csv(decisions, output_path):
-    """Write trade decisions to CSV."""
+def write_csv(forecasts, output_path, start_timestamp, predict_hours):
+    """Write price forecast decisions to CSV."""
+    end_timestamp = start_timestamp + predict_hours * 3600
     with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["name", "direction", "order_type",
-                                                "price", "size", "leverage"])
+        writer = csv.DictWriter(f, fieldnames=["name", "start_timestamp", "end_timestamp",
+                                               "range_low", "range_high"])
         writer.writeheader()
-        writer.writerows(decisions)
+        for row in forecasts:
+            writer.writerow({
+                "name": row["name"],
+                "start_timestamp": start_timestamp,
+                "end_timestamp": end_timestamp,
+                "range_low": row["range_low"],
+                "range_high": row["range_high"],
+            })
 
 
 # ============== Main ==============
@@ -422,6 +429,8 @@ def main():
                         help="Flask server URL (default: http://localhost:5001)")
     parser.add_argument("--rounds", type=int, default=15,
                         help="Max simulation rounds (default: 15)")
+    parser.add_argument("--predict-hours", type=int, default=12,
+                        help="Forecast horizon in hours (default: 12)")
     args = parser.parse_args()
 
     args.output = resolve_path(args.output)
@@ -456,17 +465,19 @@ def main():
     simulation_id = step3_prepare_simulation(args.base_url, project_id, graph_id,
                                              agent_count=agent_count, session=session)
     step4_run_simulation(args.base_url, simulation_id, max_rounds=args.rounds, session=session)
-    decisions = step5_interview_for_trades(args.base_url, simulation_id, llm, seed_text, session=session)
+    forecasts = step5_interview_for_trades(args.base_url, simulation_id, llm, seed_text,
+                                           args.predict_hours, session=session)
 
-    if decisions:
-        write_csv(decisions, args.output)
+    if forecasts:
+        start_ts = extract_latest_timestamp(seed_text)
+        write_csv(forecasts, args.output, start_ts, args.predict_hours)
         print()
         print("=" * 50)
-        print(f"Output: {args.output} ({len(decisions)} decisions)")
+        print(f"Output: {args.output} ({len(forecasts)} forecasts)")
     else:
         print()
         print("=" * 50)
-        print("Warning: No valid trade decisions were generated")
+        print("Warning: No valid price forecasts were generated")
         sys.exit(1)
 
 
