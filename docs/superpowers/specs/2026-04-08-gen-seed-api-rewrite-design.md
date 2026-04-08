@@ -94,19 +94,19 @@ GET /api/v1/history/news?start=<ms>&end=<ms>
 
 ## 1D
 Date       | Open      | High      | Low       | Close     | Volume
-2026-04-04 | 83,000.00 | 84,500.00 | 82,100.00 | 83,800.00 | 12,000.00
-2026-04-05 | 82,900.00 | 83,600.00 | 82,400.00 | 83,100.00 | 10,800.00
 2026-04-06 | 83,100.00 | 84,200.00 | 82,800.00 | 83,900.00 | 11,200.00
+2026-04-05 | 82,900.00 | 83,600.00 | 82,400.00 | 83,100.00 | 10,800.00
+2026-04-04 | 83,000.00 | 84,500.00 | 82,100.00 | 83,800.00 | 12,000.00
 
 ## 4H
 Date/Time         | Open      | High      | Low       | Close     | Volume
-2026-04-04 00:00  | 83,000.00 | 83,600.00 | 82,800.00 | 83,200.00 |  2,100.00
-...  (18 rows for --days 3)
+2026-04-06 20:00  | 83,500.00 | 83,900.00 | 83,200.00 | 83,700.00 |  1,900.00
+...  (18 rows for --days 3, newest first)
 
 ## 1H
 Date/Time         | Open      | High      | Low       | Close     | Volume
-2026-04-04 00:00  | 83,200.00 | 83,500.00 | 83,000.00 | 83,300.00 |    450.00
-...  (72 rows for --days 3)
+2026-04-06 23:00  | 83,700.00 | 83,900.00 | 83,500.00 | 83,800.00 |    420.00
+...  (72 rows for --days 3, newest first)
 
 # Liquidations
 Last | Long liq | Short liq
@@ -117,8 +117,8 @@ Last | Long liq | Short liq
 
 # News
 Time             | News
-2026-04-06 08:30 | Fed signals pause in rate hikes
 2026-04-06 14:00 | MicroStrategy buys 500 BTC
+2026-04-06 08:30 | Fed signals pause in rate hikes
 
 # Agents Population
 - quant1: ...
