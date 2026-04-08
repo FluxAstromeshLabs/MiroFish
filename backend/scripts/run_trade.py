@@ -210,18 +210,24 @@ def step4_run_simulation(base_url, simulation_id, max_rounds=10, session=None):
 # ============== Interview & Decision Parsing ==============
 
 def _parse_range(response_text):
-    """Parse 'range_low,range_high' from agent response. Returns (float, float) or None."""
-    try:
-        parts = response_text.strip().split(",")
-        if len(parts) != 2:
-            return None
-        low = float(parts[0].strip())
-        high = float(parts[1].strip())
-        if low <= 0 or high <= 0 or low >= high:
-            return None
-        return (low, high)
-    except (ValueError, AttributeError):
+    """Parse two floats from agent response. Returns (float, float) or None.
+
+    Uses regex extraction so the response can contain extra words/punctuation
+    (e.g. 'The range is 83000.5,85200.0' or '83000.5 to 85200.0').
+    Validates: both values > 0, low < high.
+    """
+    if not isinstance(response_text, str):
         return None
+    nums = re.findall(r'\d+(?:\.\d+)?', response_text)
+    if len(nums) < 2:
+        return None
+    try:
+        low, high = float(nums[0]), float(nums[1])
+    except ValueError:
+        return None
+    if low <= 0 or high <= 0 or low >= high:
+        return None
+    return (low, high)
 
 
 def _fmt_forecast(agent_name, range_low, range_high):
@@ -409,7 +415,7 @@ def write_csv(forecasts, output_path, start_timestamp, predict_hours):
 # ============== Main ==============
 
 def main():
-    parser = argparse.ArgumentParser(description="MiroFish Trade Decision Pipeline")
+    parser = argparse.ArgumentParser(description="MiroFish Price Forecast Pipeline")
     parser.add_argument("seed_file", help="Path to seed file (md/txt)")
     default_output = os.path.join(project_root, '..', 'rust-connectors', 'price_forecast.csv')
     parser.add_argument("-o", "--output", default=default_output,
