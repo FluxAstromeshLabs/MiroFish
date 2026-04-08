@@ -1,20 +1,136 @@
-# Futures Market Report
-- Current price stands at $887.50, with a spread of $5.00 between the best ask and best bid.
-- Taker volume for the last hour reached 36,939.59, with a taker buy/sell ratio of 1.2 indicating bullish sentiment.
-- The highest price recorded in the last hour was $1,077.00, while the lowest was $880.00.
-- Open interest has significantly decreased by 84.53%, dropping from 9.5142 to 1.4719.
-- A total of 2,076 trades were executed, with the largest trade being a sell at $1,059.50 for 1.6402 units.
-- Total liquidations for short positions amounted to $1,451.97, while no long positions were liquidated.
-- The volume-weighted average price (VWAP) is notably higher at $1,010.73, suggesting a potential price correction ahead.
+# OHLCV
 
-The market is currently experiencing a significant downturn, as indicated by the drastic reduction in open interest, which has fallen by over 84%. This suggests a substantial exit of capital and a lack of confidence among traders. The bullish sentiment reflected in the taker buy/sell ratio of 1.2 could indicate that some traders are attempting to capitalize on the lower price levels, but the overall trend remains bearish due to the high levels of short liquidations and the substantial spread in prices.
+## 1H
+Date/Time        |       Open |       High |        Low |      Close |       Volume
+2026-04-06 23:00 |  68,777.00 |  68,871.90 |  68,227.50 |  68,817.90 |    10,845.19
+2026-04-06 22:00 |  69,476.50 |  69,554.20 |  68,777.30 |  68,785.00 |     5,422.78
+2026-04-06 21:00 |  69,779.50 |  69,784.30 |  69,400.10 |  69,462.60 |     1,979.28
+2026-04-06 20:00 |  69,704.80 |  69,940.00 |  69,578.00 |  69,799.90 |     2,115.54
+2026-04-06 19:00 |  69,852.80 |  69,862.20 |  69,543.80 |  69,704.40 |     1,642.14
+2026-04-06 18:00 |  69,540.60 |  69,955.30 |  69,436.40 |  69,840.90 |     4,515.95
+2026-04-06 17:00 |  69,759.20 |  69,778.40 |  69,240.00 |  69,550.10 |     5,480.25
+2026-04-06 16:00 |  69,922.40 |  70,238.00 |  69,762.80 |  69,804.50 |     4,462.81
+2026-04-06 15:00 |  69,620.00 |  69,922.50 |  69,518.00 |  69,922.50 |     3,129.09
+2026-04-06 14:00 |  69,399.70 |  69,757.80 |  69,088.00 |  69,645.70 |     6,868.69
+2026-04-06 13:00 |  69,337.40 |  69,521.40 |  69,221.30 |  69,355.60 |     1,923.32
+2026-04-06 12:00 |  69,583.50 |  69,586.20 |  69,283.00 |  69,320.80 |     1,233.80
+2026-04-06 11:00 |  69,739.20 |  69,739.20 |  69,541.50 |  69,566.20 |     1,220.34
+2026-04-06 10:00 |  69,699.40 |  69,982.20 |  69,671.20 |  69,739.20 |     2,659.44
+2026-04-06 09:00 |  69,191.70 |  70,252.90 |  69,185.90 |  69,711.60 |     8,839.35
+2026-04-06 08:00 |  69,089.80 |  69,275.50 |  69,047.70 |  69,215.00 |     1,192.47
+2026-04-06 07:00 |  68,958.80 |  69,173.50 |  68,800.00 |  69,068.90 |     2,668.49
+2026-04-06 06:00 |  69,167.00 |  69,338.20 |  68,769.60 |  68,943.40 |     5,226.76
+2026-04-06 05:00 |  69,107.60 |  69,214.50 |  69,059.50 |  69,167.10 |       879.76
+2026-04-06 04:00 |  69,092.30 |  69,188.00 |  68,956.40 |  69,107.60 |     1,891.64
+2026-04-06 03:00 |  69,183.60 |  69,223.40 |  69,029.60 |  69,087.90 |     2,304.23
+2026-04-06 02:00 |  68,782.90 |  69,386.20 |  68,740.20 |  69,219.20 |     2,465.78
+2026-04-06 01:00 |  69,051.90 |  69,103.10 |  68,761.10 |  68,788.00 |     5,750.77
+2026-04-06 00:00 |  69,437.30 |  69,490.00 |  69,030.00 |  69,051.90 |     6,530.65
+2026-04-05 23:00 |  68,313.00 |  69,100.00 |  68,264.50 |  68,974.50 |     7,418.97
+2026-04-05 22:00 |  67,519.50 |  68,342.00 |  67,313.60 |  68,325.40 |     6,281.97
+2026-04-05 21:00 |  67,636.70 |  67,670.20 |  67,377.20 |  67,519.40 |     2,366.33
+2026-04-05 20:00 |  67,329.10 |  67,681.60 |  67,313.10 |  67,615.00 |     1,538.65
+2026-04-05 19:00 |  67,381.20 |  67,540.00 |  67,250.00 |  67,299.00 |     2,030.40
+2026-04-05 18:00 |  67,342.20 |  67,428.20 |  67,246.60 |  67,360.90 |       981.75
+2026-04-05 17:00 |  67,178.90 |  67,376.30 |  67,150.00 |  67,325.10 |     1,681.61
+2026-04-05 16:00 |  67,272.20 |  67,372.20 |  67,132.20 |  67,178.80 |     2,923.56
+2026-04-05 15:00 |  66,892.60 |  67,828.60 |  66,792.60 |  67,277.40 |    16,027.79
+2026-04-05 14:00 |  66,863.50 |  66,940.20 |  66,809.90 |  66,887.20 |     1,198.03
+2026-04-05 13:00 |  66,751.50 |  66,892.90 |  66,666.00 |  66,863.50 |     1,492.46
+2026-04-05 12:00 |  66,972.70 |  66,972.70 |  66,650.10 |  66,751.50 |     4,305.70
+2026-04-05 11:00 |  67,012.40 |  67,053.50 |  66,934.40 |  66,972.70 |       915.89
+2026-04-05 10:00 |  66,996.10 |  67,124.80 |  66,928.10 |  67,020.00 |       660.06
+2026-04-05 09:00 |  66,892.60 |  67,005.00 |  66,862.80 |  66,996.20 |     1,140.35
+2026-04-05 08:00 |  66,787.40 |  66,910.00 |  66,782.10 |  66,892.60 |     1,256.14
+2026-04-05 07:00 |  66,771.60 |  66,881.00 |  66,685.30 |  66,780.30 |     2,369.00
+2026-04-05 06:00 |  66,905.20 |  66,914.00 |  66,575.50 |  66,771.60 |     5,480.22
+2026-04-05 05:00 |  67,066.30 |  67,127.50 |  66,875.30 |  66,887.80 |     1,398.66
+2026-04-05 04:00 |  67,113.40 |  67,160.00 |  67,034.80 |  67,066.30 |       751.71
+2026-04-05 03:00 |  67,144.30 |  67,164.00 |  67,072.10 |  67,098.90 |       203.15
+2026-04-05 02:00 |  67,060.60 |  67,151.10 |  66,900.00 |  67,147.70 |     1,847.26
+2026-04-05 01:00 |  67,177.00 |  67,200.00 |  67,045.50 |  67,060.60 |       750.20
+2026-04-05 00:00 |  67,275.90 |  67,275.90 |  67,141.30 |  67,151.20 |       649.46
+2026-04-04 23:00 |  67,368.90 |  67,371.40 |  67,214.20 |  67,265.80 |     1,053.26
+2026-04-04 22:00 |  67,325.00 |  67,438.70 |  67,305.40 |  67,368.90 |       481.69
+2026-04-04 21:00 |  67,240.20 |  67,452.70 |  67,180.90 |  67,326.20 |       784.98
+2026-04-04 20:00 |  67,262.80 |  67,269.40 |  67,162.90 |  67,240.20 |       666.98
+2026-04-04 19:00 |  67,265.60 |  67,478.60 |  67,245.60 |  67,252.00 |     1,046.92
+2026-04-04 18:00 |  67,302.30 |  67,341.00 |  67,226.40 |  67,268.50 |       852.02
+2026-04-04 17:00 |  67,335.10 |  67,382.90 |  67,249.90 |  67,306.80 |     1,166.93
+2026-04-04 16:00 |  67,357.40 |  67,498.80 |  67,292.00 |  67,355.30 |     3,761.00
+2026-04-04 15:00 |  67,177.50 |  67,445.50 |  67,145.60 |  67,357.30 |     4,439.66
+2026-04-04 14:00 |  67,170.00 |  67,193.30 |  67,003.70 |  67,152.50 |     3,697.85
+2026-04-04 13:00 |  67,061.90 |  67,245.30 |  67,044.80 |  67,179.40 |     1,846.94
+2026-04-04 12:00 |  67,128.90 |  67,150.50 |  67,027.10 |  67,061.90 |       607.56
+2026-04-04 11:00 |  67,139.10 |  67,223.80 |  67,053.00 |  67,107.30 |     1,647.05
+2026-04-04 10:00 |  66,952.10 |  67,150.30 |  66,880.90 |  67,139.10 |     1,251.14
+2026-04-04 09:00 |  66,907.80 |  66,958.20 |  66,882.10 |  66,946.20 |       734.09
+2026-04-04 08:00 |  66,982.10 |  67,024.40 |  66,874.50 |  66,907.90 |     1,014.41
+2026-04-04 07:00 |  66,981.50 |  67,004.10 |  66,915.10 |  66,982.00 |       633.10
+2026-04-04 06:00 |  66,871.00 |  67,014.80 |  66,871.00 |  66,987.00 |       874.19
+2026-04-04 05:00 |  66,833.50 |  66,908.40 |  66,819.70 |  66,871.00 |       754.38
+2026-04-04 04:00 |  66,799.10 |  66,839.90 |  66,745.50 |  66,831.40 |       307.97
+2026-04-04 03:00 |  66,814.00 |  66,875.40 |  66,798.80 |  66,808.80 |       443.11
+2026-04-04 02:00 |  66,820.00 |  66,890.00 |  66,778.50 |  66,814.10 |       432.10
+2026-04-04 01:00 |  66,863.40 |  66,893.20 |  66,798.10 |  66,820.00 |       603.61
+2026-04-04 00:00 |  66,874.10 |  66,935.30 |  66,851.90 |  66,863.40 |       568.71
 
-Despite the recent volatility, the high recorded at $1,077.00 indicates potential resistance levels that traders should monitor closely. The large sell trade at $1,059.50 further underscores the existing selling pressure. Therefore, while some buying interest exists, the market may need to stabilize before any sustained recovery can occur.
+## 4H
+Date/Time        |       Open |       High |        Low |      Close |       Volume
+2026-04-06 20:00 |  69,704.80 |  69,940.00 |  68,227.50 |  68,817.90 |    20,362.79
+2026-04-06 16:00 |  69,922.40 |  70,238.00 |  69,240.00 |  69,704.40 |    16,101.14
+2026-04-06 12:00 |  69,583.50 |  69,922.50 |  69,088.00 |  69,922.50 |    13,154.89
+2026-04-06 08:00 |  69,089.80 |  70,252.90 |  69,047.70 |  69,566.20 |    13,911.61
+2026-04-06 04:00 |  69,092.30 |  69,338.20 |  68,769.60 |  69,068.90 |    10,666.65
+2026-04-06 00:00 |  69,437.30 |  69,490.00 |  68,740.20 |  69,087.90 |    17,051.42
+2026-04-05 20:00 |  67,329.10 |  69,100.00 |  67,313.10 |  68,974.50 |    17,605.92
+2026-04-05 16:00 |  67,272.20 |  67,540.00 |  67,132.20 |  67,299.00 |     7,617.31
+2026-04-05 12:00 |  66,972.70 |  67,828.60 |  66,650.10 |  67,277.40 |    23,023.97
+2026-04-05 08:00 |  66,787.40 |  67,124.80 |  66,782.10 |  66,972.70 |     3,972.45
+2026-04-05 04:00 |  67,113.40 |  67,160.00 |  66,575.50 |  66,780.30 |     9,999.59
+2026-04-05 00:00 |  67,275.90 |  67,275.90 |  66,900.00 |  67,098.90 |     3,450.07
+2026-04-04 20:00 |  67,262.80 |  67,452.70 |  67,162.90 |  67,265.80 |     2,986.92
+2026-04-04 16:00 |  67,357.40 |  67,498.80 |  67,226.40 |  67,252.00 |     6,826.87
+2026-04-04 12:00 |  67,128.90 |  67,445.50 |  67,003.70 |  67,357.30 |    10,592.01
+2026-04-04 08:00 |  66,982.10 |  67,223.80 |  66,874.50 |  67,107.30 |     4,646.68
+2026-04-04 04:00 |  66,799.10 |  67,014.80 |  66,745.50 |  66,982.00 |     2,569.63
+2026-04-04 00:00 |  66,874.10 |  66,935.30 |  66,778.50 |  66,808.80 |     2,047.52
 
-# Agents
-1. master1 - Veteran quant trader, 10 years experience, manages a $5M crypto book. Calm, analytical, uses technical analysis and order book data.
-2. master2 - Former institutional desk trader turned independent. Disciplined risk manager. Rarely trades on emotion.
-3. fomo1 - 26-year-old crypto influencer with 200K followers. Constantly watching his phone. Jumps in on pumps based on Twitter hype.
-4. fomo2 - Office worker who started trading in 2024. Follows crypto YouTubers. Panic-buys after seeing green candles on his phone notifications.
-5. dummy1 - Retired electrician, first crypto trade. Heard about Bitcoin from his son. Completely random decisions.
-6. dummy2 - Nurse, bought Bitcoin at the peak in 2021 and sold at a loss. Trying again. Emotional, uncertain.
+## 1D
+Date       |       Open |       High |        Low |      Close |       Volume
+2026-04-06 |  69,437.30 |  70,252.90 |  68,227.50 |  68,817.90 |    91,248.50
+2026-04-05 |  67,275.90 |  69,100.00 |  66,575.50 |  68,974.50 |    65,669.30
+2026-04-04 |  66,874.10 |  67,498.80 |  66,745.50 |  67,265.80 |    29,669.64
+
+# Liquidations
+Last |  Long liq |  Short liq
+1h   |   $231.0K |    $764.7K
+4h   |   $118.1K |    $969.7K
+12h  |   $790.6K |    $331.3K
+24h  |   $637.7K |    $143.1K
+
+# News
+Time             | News
+(no news)
+
+# Agents Population
+- quant1: Analytical, data-driven, emotionally detached. Trusts numbers over intuition.
+- quant2: Methodical and process-oriented. Uncomfortable with ambiguity, relies on repeatable systems.
+- swing1: Patient, reads macro structure. Waits for conviction before committing.
+- swing2: Trend-follower with a high tolerance for drawdown. Holds through noise.
+- scalper1: Hyper-focused, reactive, lives in the short-term. Dislikes overnight exposure.
+- scalper2: Competitive and fast-twitch. Treats every tick as an opportunity.
+- whale1: Methodical and private. Moves quietly, thinks in large time horizons.
+- whale2: Deliberate and patient. Rarely overreacts, hard to rattle.
+- news1: Macro-aware and well-read. Connects headline dots faster than most.
+- news2: Alert and always plugged in. First to react to crypto-native developments.
+- degen1: Impulsive and overconfident. Thrives on volatility, hates sitting on the sidelines.
+- degen2: Risk-blind and excitement-driven. Chases action more than outcomes.
+- hodler1: Patient and conviction-driven. Tunes out short-term noise.
+- contrarian1: Skeptical of consensus. Comfortable being the only one taking the opposite view.
+- retail1: Easily influenced, reactive to price moves and social feeds.
+- kol1 (KOL, 2.1M followers): Hype-driven, high-energy, large retail audience. Posts frequently and amplifies momentum.
+- kol2 (KOL, 420K followers): Measured and data-heavy. Institutional-leaning audience, focuses on evidence over emotion.
+- kol3 (KOL, 95K followers): Niche on-chain specialist. Small but highly technical and loyal following.
+- kol4 (KOL, 1.8M followers): Macro-first thinker. Bridges TradFi and crypto, commands credibility across both.
+- kol5 (KOL, 31K followers): Contrarian voice. Often goes against popular takes, niche but devoted community.
