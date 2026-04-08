@@ -14,10 +14,10 @@ Replace the trade-decision interview (step 5) with a price-range forecast interv
 
 ## CLI Change
 
-Add `--forecast-hours` (int, default `4`) to `run_trade.py`'s argument parser. Pass it through to `step5_interview_for_trades`.
+Add `--predict-hours` (int, default `12`) to `run_trade.py`'s argument parser. Pass it through to `step5_interview_for_trades`.
 
 ```
-python run_trade.py seed.md --forecast-hours 4
+python run_trade.py seed.md --predict-hours 12
 ```
 
 ---
@@ -26,18 +26,18 @@ python run_trade.py seed.md --forecast-hours 4
 
 Add `extract_latest_timestamp(seed_text: str) -> int`.
 
-- Parse the OHLCV table in the seed (rows like `| timestamp | open | ... |`)
-- Extract the last numeric timestamp value
-- Return it as Unix seconds (int)
+- Parse the OHLCV table in the seed. Rows use human-readable format: `2026-04-06 23:00 | 68,777.00 | ...`
+- Extract the **first** `Date/Time` row after the `## 1H` header — this is the most recent candle (rows are newest-first)
+- Parse with `datetime.strptime(value, "%Y-%m-%d %H:%M")`, assume UTC, return as Unix seconds (int)
 - Fallback: `int(time.time())` if no timestamp found
 
 ---
 
 ## World Seed Context
 
-Strip the `# Agents` section from `seed_text` before passing to the interview prompt, so agents get market context only (no other agents' profiles).
+Strip the `# Agents Population` section from `seed_text` before passing to the interview prompt, so agents get market context only (no other agents' profiles).
 
-Helper: `strip_agents_section(seed_text: str) -> str` — split on `# Agents`, keep the first part.
+Helper: `strip_agents_section(seed_text: str) -> str` — split on `# Agents Population`, keep the first part.
 
 ---
 
@@ -47,13 +47,10 @@ Helper: `strip_agents_section(seed_text: str) -> str` — split on `# Agents`, k
 Here is the current market context:
 {world_seed}
 
-Based on this data and your discussions, predict the price range for the next {forecast_hours} hours.
+Based on this data and your discussions, predict the price range for the next {predict_hours} hours.
 
 **CRITICAL: You MUST respond with EXACTLY two numbers separated by a comma. Nothing else. No words, no explanation, no punctuation other than the comma and decimal point.**
 Format: range_low,range_high
-Example: 83000.5,85200.0
-
-Any response that does not match this exact format will be discarded.
 ```
 
 ---
@@ -75,7 +72,7 @@ No LLM re-parsing. Format is strict enough to parse directly.
 
 ## Fallback (Persona-Based)
 
-Replace `_decide_from_persona` with `_forecast_from_persona(llm, agent_name, persona, world_seed, forecast_hours)`.
+Replace `_decide_from_persona` with `_forecast_from_persona(llm, agent_name, persona, world_seed, predict_hours)`.
 
 Same structure as before but prompts the agent (via LLM) for a price range. Uses `world_seed` (agents section stripped). Parses response with `_parse_range`.
 
@@ -89,7 +86,7 @@ Fields: `name,start_timestamp,end_timestamp,range_low,range_high`
 |---|---|
 | `name` | Agent name |
 | `start_timestamp` | Unix seconds of latest OHLCV candle from seed |
-| `end_timestamp` | `start_timestamp + forecast_hours * 3600` |
+| `end_timestamp` | `start_timestamp + predict_hours * 3600` |
 | `range_low` | Lower bound of predicted price range |
 | `range_high` | Upper bound of predicted price range |
 
@@ -115,7 +112,7 @@ Replaces the existing trade-decision CSV entirely.
 | `_fmt_decision` | `_fmt_forecast` |
 | `_decide_from_persona` | `_forecast_from_persona` |
 | `_interview_agents` | updated in-place |
-| `step5_interview_for_trades` | updated in-place (add `forecast_hours` param) |
+| `step5_interview_for_trades` | updated in-place (add `predict_hours` param) |
 | — | `extract_latest_timestamp` |
 | — | `strip_agents_section` |
 

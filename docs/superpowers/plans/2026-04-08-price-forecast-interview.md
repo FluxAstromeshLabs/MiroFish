@@ -107,14 +107,16 @@ from run_trade import extract_latest_timestamp
 
 
 def test_extract_latest_timestamp_from_ohlcv_table():
+    # Rows are newest-first; first data row after header is the latest candle
     seed = (
-        "# OHLCV\n"
-        "| timestamp | open | high | low | close | volume |\n"
-        "|---|---|---|---|---|---|\n"
-        "| 1712400000 | 80000 | 81000 | 79000 | 80500 | 100 |\n"
-        "| 1712403600 | 80500 | 82000 | 80000 | 81500 | 120 |\n"
+        "# OHLCV\n\n"
+        "## 1H\n"
+        "Date/Time        |       Open |       High |        Low |      Close |       Volume\n"
+        "2026-04-06 23:00 |  68,777.00 |  68,871.90 |  68,227.50 |  68,817.90 |    10,845.19\n"
+        "2026-04-06 22:00 |  68,777.00 |  68,871.90 |  68,227.50 |  68,817.90 |     5,422.78\n"
     )
-    assert extract_latest_timestamp(seed) == 1712403600
+    # 2026-04-06 23:00 UTC = 1775516400
+    assert extract_latest_timestamp(seed) == 1775516400
 
 
 def test_extract_latest_timestamp_no_table():
@@ -125,8 +127,13 @@ def test_extract_latest_timestamp_no_table():
 
 
 def test_extract_latest_timestamp_single_row():
-    seed = "| 1712400000 | 80000 | 81000 | 79000 | 80500 | 100 |\n"
-    assert extract_latest_timestamp(seed) == 1712400000
+    seed = (
+        "## 1H\n"
+        "Date/Time        |       Open |\n"
+        "2026-04-06 00:00 |  69,437.30 |\n"
+    )
+    # 2026-04-06 00:00 UTC = 1775433600
+    assert extract_latest_timestamp(seed) == 1775433600
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -139,17 +146,29 @@ Expected: `ImportError` or `AttributeError`.
 
 - [ ] **Step 3: Add `extract_latest_timestamp` to `run_trade.py`**
 
-Add after `strip_agents_section`:
+Add after `strip_agents_section`. Also add `import re` and `from datetime import datetime, timezone` at the top of the file alongside the existing imports.
 
 ```python
-import re as _re
-
 def extract_latest_timestamp(seed_text):
-    """Return Unix seconds of the latest OHLCV candle in seed_text, or now() as fallback."""
-    # Match table cells containing a bare integer (Unix timestamp: 10 digits)
-    matches = _re.findall(r'\|\s*(\d{10})\s*\|', seed_text)
-    if matches:
-        return int(matches[-1])
+    """Return Unix seconds of the latest OHLCV candle in seed_text, or now() as fallback.
+
+    The seed's 1H table lists rows newest-first in the format:
+        2026-04-06 23:00 |  68,777.00 | ...
+    We find the first such row after the '## 1H' header.
+    """
+    import re
+    from datetime import datetime, timezone
+
+    # Find the ## 1H section first
+    match = re.search(
+        r'## 1H\n'                          # section header
+        r'Date/Time[^\n]*\n'                # column header row
+        r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2})',  # first data row timestamp
+        seed_text
+    )
+    if match:
+        dt = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
     return int(time.time())
 ```
 
