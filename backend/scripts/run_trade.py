@@ -50,6 +50,13 @@ def count_agents_in_seed(seed_text):
     return max(len(lines), 6)
 
 
+def strip_agents_section(seed_text):
+    """Remove the '# Agents Population' section and everything after it."""
+    if "# Agents Population" in seed_text:
+        return seed_text.split("# Agents Population", 1)[0]
+    return seed_text
+
+
 # ============== Pipeline Steps ==============
 
 def check_server(base_url, session=None):
