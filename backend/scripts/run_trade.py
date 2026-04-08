@@ -1,6 +1,6 @@
 """
-MiroFish Trade Decision Pipeline
-Automates: seed.md → Ontology → Graph → Simulation → Interview → trade_decision.csv
+MiroFish Price Forecast Pipeline
+Automates: seed.md → Ontology → Graph → Simulation → Interview → price_forecast.csv
 """
 
 import os
@@ -317,23 +317,14 @@ def _interview_agents(base_url, simulation_id, seed_text, predict_hours, id_to_p
         parse_tasks.append((idx, agent_name, response_text))
 
     forecasts = []
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        futures = {
-            pool.submit(_parse_range, resp): (idx, name)
-            for idx, name, resp in parse_tasks
-        }
-        for future in as_completed(futures):
-            idx, name = futures[future]
-            try:
-                result = future.result()
-                if result:
-                    low, high = result
-                    forecasts.append({"name": name, "range_low": low, "range_high": high})
-                    print(f"  [{idx}/{agent_count}] {_fmt_forecast(name, low, high)}")
-                else:
-                    print(f"  [{idx}/{agent_count}] {name}: could not parse forecast")
-            except Exception as e:
-                print(f"  [{idx}/{agent_count}] {name}: parse error: {e}")
+    for idx, name, resp in parse_tasks:
+        result = _parse_range(resp)
+        if result:
+            low, high = result
+            forecasts.append({"name": name, "range_low": low, "range_high": high})
+            print(f"  [{idx}/{agent_count}] {_fmt_forecast(name, low, high)}")
+        else:
+            print(f"  [{idx}/{agent_count}] {name}: could not parse forecast")
 
     return forecasts
 
@@ -420,9 +411,9 @@ def write_csv(forecasts, output_path, start_timestamp, predict_hours):
 def main():
     parser = argparse.ArgumentParser(description="MiroFish Trade Decision Pipeline")
     parser.add_argument("seed_file", help="Path to seed file (md/txt)")
-    default_output = os.path.join(project_root, '..', 'rust-connectors', 'trade_decision.csv')
+    default_output = os.path.join(project_root, '..', 'rust-connectors', 'price_forecast.csv')
     parser.add_argument("-o", "--output", default=default_output,
-                        help="Output CSV path (default: ../rust-connectors/trade_decision.csv)")
+                        help="Output CSV path (default: ../rust-connectors/price_forecast.csv)")
     parser.add_argument("-r", "--requirement", default=None,
                         help="Simulation requirement (default: uses seed file content)")
     parser.add_argument("--base-url", default="http://localhost:5001",
