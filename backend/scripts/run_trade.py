@@ -209,85 +209,24 @@ def step4_run_simulation(base_url, simulation_id, max_rounds=10, session=None):
 
 # ============== Interview & Decision Parsing ==============
 
-def _parse_decision(llm, agent_name, response_text, seed_text):
-    """Parse a free-text trade response into a structured decision dict. Returns None on failure."""
-    parsed = llm.chat_json(
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "Extract the trade decision from the trader's response. "
-                    "The market context is:\n"
-                    f"{seed_text}\n\n"
-                    "Return JSON with exactly these fields:\n"
-                    '- direction: "LONG" or "SHORT"\n'
-                    '- order_type: "LIMIT" or "MARKET"\n'
-                    "- price: number (only for LIMIT orders, null for MARKET; must be near current market price)\n"
-                    "- size: number (position size, must be realistic)\n"
-                    "- leverage: integer (1-100)\n\n"
-                    "If the response is vague, infer the most likely decision based on "
-                    "their personality and the market data."
-                )
-            },
-            {
-                "role": "user",
-                "content": f"Trader response:\n{response_text}"
-            }
-        ],
-        temperature=0.1
-    )
-
-    return _validate_decision(parsed, agent_name)
-
-
-def _validate_decision(parsed, agent_name):
-    """Validate and normalize a parsed decision dict. Returns None on invalid data."""
-    direction = str(parsed.get("direction", "")).upper()
-    order_type = str(parsed.get("order_type", "")).upper()
-
-    if direction not in ("LONG", "SHORT"):
-        return None
-
-    if order_type not in ("LIMIT", "MARKET"):
-        order_type = "MARKET"
-
-    price = parsed.get("price")
-    if order_type == "MARKET":
-        price = ""
-    elif price is not None:
-        try:
-            price = float(price)
-        except (TypeError, ValueError):
-            price = ""
-
+def _parse_range(response_text):
+    """Parse 'range_low,range_high' from agent response. Returns (float, float) or None."""
     try:
-        size = float(parsed.get("size", 0))
-        if size <= 0:
+        parts = response_text.strip().split(",")
+        if len(parts) != 2:
             return None
-    except (TypeError, ValueError):
+        low = float(parts[0].strip())
+        high = float(parts[1].strip())
+        if low <= 0 or high <= 0 or low >= high:
+            return None
+        return (low, high)
+    except (ValueError, AttributeError):
         return None
 
-    try:
-        leverage = int(parsed.get("leverage", 1))
-        leverage = max(1, min(100, leverage))
-    except (TypeError, ValueError):
-        leverage = 1
 
-    return {
-        "name": agent_name,
-        "direction": direction,
-        "order_type": order_type,
-        "price": price,
-        "size": size,
-        "leverage": leverage,
-    }
-
-
-def _fmt_decision(agent_name, decision):
-    """Format a trade decision as a display string."""
-    price_str = f"${decision['price']}" if decision['price'] != "" else "MARKET"
-    return (f"{agent_name}: {decision['direction']:<5} "
-            f"{decision['order_type']:<6} {price_str:<12} size={decision['size']}  {decision['leverage']}x")
+def _fmt_forecast(agent_name, range_low, range_high):
+    """Format a price forecast as a display string."""
+    return f"{agent_name}: {range_low} — {range_high}"
 
 
 def _decide_from_persona(llm, agent_name, persona, seed_text):

@@ -67,3 +67,41 @@ def test_extract_latest_timestamp_single_row():
     )
     # 2026-04-06 00:00 UTC = 1775433600
     assert extract_latest_timestamp(seed) == 1775433600
+
+
+from run_trade import _parse_range, _fmt_forecast
+
+
+def test_parse_range_valid():
+    assert _parse_range("83000.5,85200.0") == (83000.5, 85200.0)
+
+
+def test_parse_range_with_whitespace():
+    assert _parse_range("  83000.5 , 85200.0  ") == (83000.5, 85200.0)
+
+
+def test_parse_range_low_equals_high_invalid():
+    assert _parse_range("83000.0,83000.0") is None
+
+
+def test_parse_range_low_greater_than_high_invalid():
+    assert _parse_range("85000.0,83000.0") is None
+
+
+def test_parse_range_non_numeric_invalid():
+    assert _parse_range("LONG,SHORT") is None
+
+
+def test_parse_range_single_value_invalid():
+    assert _parse_range("83000.5") is None
+
+
+def test_parse_range_zero_invalid():
+    assert _parse_range("0,85000.0") is None
+
+
+def test_fmt_forecast():
+    result = _fmt_forecast("quant1", 83000.5, 85200.0)
+    assert "quant1" in result
+    assert "83000.5" in result
+    assert "85200.0" in result
