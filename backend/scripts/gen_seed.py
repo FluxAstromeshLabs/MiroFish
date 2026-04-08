@@ -118,3 +118,164 @@ def format_news(items):
     if not rows:
         rows.append("(no news)")
     return "\n".join(["# News", header] + rows)
+
+
+# ── API fetchers ───────────────────────────────────────────────────────────
+
+def fetch_ohlcv(base_url, bucket, day):
+    """
+    GET /api/v1/history/ohlcv?bucket=<bucket>&day=<day>&start=<ms>&end=<ms>
+    Returns list of item dicts with open_time_ms, open, high, low, close, volume.
+    """
+    start, end = day_bounds_ms(day)
+    resp = requests.get(
+        f"{base_url}/api/v1/history/ohlcv",
+        params={"bucket": bucket, "day": day, "start": start, "end": end},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json().get("items", [])
+
+
+def fetch_liquidations(base_url, start_ms, end_ms):
+    """
+    GET /api/v1/history/liquidations?start=<ms>&end=<ms>
+    Returns dict with total_long, total_short, count, items.
+    """
+    resp = requests.get(
+        f"{base_url}/api/v1/history/liquidations",
+        params={"start": start_ms, "end": end_ms},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def fetch_news(base_url, start_ms, end_ms):
+    """
+    GET /api/v1/history/news?start=<ms>&end=<ms>
+    Returns list of item dicts with timestamp_ms and content.
+    """
+    resp = requests.get(
+        f"{base_url}/api/v1/history/news",
+        params={"start": start_ms, "end": end_ms},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    return resp.json().get("items", [])
+
+
+# ── Agents ─────────────────────────────────────────────────────────────────
+
+DEFAULT_AGENTS = """\
+- quant1: Analytical, data-driven, emotionally detached. Trusts numbers over intuition.
+- quant2: Methodical and process-oriented. Uncomfortable with ambiguity, relies on repeatable systems.
+- swing1: Patient, reads macro structure. Waits for conviction before committing.
+- swing2: Trend-follower with a high tolerance for drawdown. Holds through noise.
+- scalper1: Hyper-focused, reactive, lives in the short-term. Dislikes overnight exposure.
+- scalper2: Competitive and fast-twitch. Treats every tick as an opportunity.
+- whale1: Methodical and private. Moves quietly, thinks in large time horizons.
+- whale2: Deliberate and patient. Rarely overreacts, hard to rattle.
+- news1: Macro-aware and well-read. Connects headline dots faster than most.
+- news2: Alert and always plugged in. First to react to crypto-native developments.
+- degen1: Impulsive and overconfident. Thrives on volatility, hates sitting on the sidelines.
+- degen2: Risk-blind and excitement-driven. Chases action more than outcomes.
+- hodler1: Patient and conviction-driven. Tunes out short-term noise.
+- contrarian1: Skeptical of consensus. Comfortable being the only one taking the opposite view.
+- retail1: Easily influenced, reactive to price moves and social feeds.
+- kol1 (KOL, 2.1M followers): Hype-driven, high-energy, large retail audience. Posts frequently and amplifies momentum.
+- kol2 (KOL, 420K followers): Measured and data-heavy. Institutional-leaning audience, focuses on evidence over emotion.
+- kol3 (KOL, 95K followers): Niche on-chain specialist. Small but highly technical and loyal following.
+- kol4 (KOL, 1.8M followers): Macro-first thinker. Bridges TradFi and crypto, commands credibility across both.
+- kol5 (KOL, 31K followers): Contrarian voice. Often goes against popular takes, niche but devoted community."""
+
+
+def load_agents(agents_path=None):
+    if agents_path and os.path.exists(agents_path):
+        with open(agents_path) as f:
+            return f.read().strip()
+    default = os.path.join(project_root, "agents.txt")
+    if os.path.exists(default):
+        with open(default) as f:
+            return f.read().strip()
+    return DEFAULT_AGENTS
+
+
+# ── Main ───────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(description="gen_seed — Flux API → seed.md (BTC Futures)")
+    parser.add_argument("--base-url", default="http://localhost:8080",
+                        help="Flux exchange base URL (default: http://localhost:8080)")
+    parser.add_argument("--day", default=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
+                        help="Ending day YYYY-MM-DD (default: today UTC)")
+    parser.add_argument("--days", type=int, default=3,
+                        help="Days of history to include (default: 3)")
+    parser.add_argument("--agents", default=None, help="Optional agents file path")
+    parser.add_argument("-o", "--output", default="seed.md",
+                        help="Output path (default: seed.md at project root)")
+    args = parser.parse_args()
+
+    args.output = resolve_path(args.output)
+    base = args.base_url
+    day = args.day
+    n = args.days
+
+    print("gen_seed — Flux API → seed.md (BTC Futures)")
+    print(f"  Base URL : {base}")
+    print(f"  Day      : {day}  ({n} days)")
+    print(f"  Output   : {args.output}")
+    print()
+
+    # Build day list oldest → newest
+    days = [offset_day(day, -(n - 1 - i)) for i in range(n)]
+    _, end_ms = day_bounds_ms(day)
+
+    # Fetch OHLCV
+    items_1d, items_4h, items_1h = [], [], []
+    for d in days:
+        print(f"  OHLCV 1D  {d} ...", end=" ", flush=True)
+        chunk = fetch_ohlcv(base, "1d", d)
+        items_1d += chunk
+        print(len(chunk))
+
+        print(f"  OHLCV 4H  {d} ...", end=" ", flush=True)
+        chunk = fetch_ohlcv(base, "4h", d)
+        items_4h += chunk
+        print(len(chunk))
+
+        print(f"  OHLCV 1H  {d} ...", end=" ", flush=True)
+        chunk = fetch_ohlcv(base, "1h", d)
+        items_1h += chunk
+        print(len(chunk))
+
+    # Fetch liquidations (4 fixed windows relative to end of --day)
+    liq_windows = {"1h": 3_600_000, "4h": 14_400_000, "12h": 43_200_000, "24h": 86_400_000}
+    liq_data = {}
+    for label, offset_ms in liq_windows.items():
+        print(f"  Liq ({label:>3}) ...", end=" ", flush=True)
+        liq_data[label] = fetch_liquidations(base, end_ms - offset_ms, end_ms)
+        print(liq_data[label].get("count", 0), "events")
+
+    # Fetch news over the full N-day window
+    start_ms, _ = day_bounds_ms(days[0])
+    print(f"  News {days[0]} → {day} ...", end=" ", flush=True)
+    news_items = fetch_news(base, start_ms, end_ms)
+    print(len(news_items), "items")
+
+    # Assemble seed
+    content = "\n\n".join([
+        format_ohlcv(items_1d, items_4h, items_1h),
+        format_liquidations(liq_data),
+        format_news(news_items),
+        "# Agents Population\n" + load_agents(args.agents),
+    ]) + "\n"
+
+    with open(args.output, "w") as f:
+        f.write(content)
+
+    print(f"\nWritten: {args.output}")
+
+
+if __name__ == "__main__":
+    main()
