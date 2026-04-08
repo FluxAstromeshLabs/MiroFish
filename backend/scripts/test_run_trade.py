@@ -34,3 +34,36 @@ def test_strip_agents_section_no_section():
 
 def test_strip_agents_section_empty():
     assert strip_agents_section("") == ""
+
+
+from run_trade import extract_latest_timestamp
+
+
+def test_extract_latest_timestamp_from_ohlcv_table():
+    # Rows are newest-first; first data row under ## 1H is the latest candle
+    seed = (
+        "# OHLCV\n\n"
+        "## 1H\n"
+        "Date/Time        |       Open |       High |        Low |      Close |       Volume\n"
+        "2026-04-06 23:00 |  68,777.00 |  68,871.90 |  68,227.50 |  68,817.90 |    10,845.19\n"
+        "2026-04-06 22:00 |  68,777.00 |  68,871.90 |  68,227.50 |  68,817.90 |     5,422.78\n"
+    )
+    # 2026-04-06 23:00 UTC = 1775516400
+    assert extract_latest_timestamp(seed) == 1775516400
+
+
+def test_extract_latest_timestamp_no_ohlcv_section():
+    import time
+    seed = "# Liquidations\nLast |  Long liq\n1h   |   $231.0K\n"
+    result = extract_latest_timestamp(seed)
+    assert abs(result - int(time.time())) < 5
+
+
+def test_extract_latest_timestamp_single_row():
+    seed = (
+        "## 1H\n"
+        "Date/Time        |       Open |\n"
+        "2026-04-06 00:00 |  69,437.30 |\n"
+    )
+    # 2026-04-06 00:00 UTC = 1775433600
+    assert extract_latest_timestamp(seed) == 1775433600

@@ -7,8 +7,10 @@ import os
 import sys
 import csv
 import time
+import re
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 
 import requests
 
@@ -55,6 +57,25 @@ def strip_agents_section(seed_text):
     if "# Agents Population" in seed_text:
         return seed_text.split("# Agents Population", 1)[0]
     return seed_text
+
+
+def extract_latest_timestamp(seed_text):
+    """Return Unix seconds of the latest OHLCV candle in seed_text, or now() as fallback.
+
+    The seed's 1H table lists rows newest-first in the format:
+        2026-04-06 23:00 |  68,777.00 | ...
+    We find the first data row after the '## 1H' header.
+    """
+    match = re.search(
+        r'## 1H\n'
+        r'Date/Time[^\n]*\n'
+        r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2})',
+        seed_text
+    )
+    if match:
+        dt = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    return int(time.time())
 
 
 # ============== Pipeline Steps ==============
