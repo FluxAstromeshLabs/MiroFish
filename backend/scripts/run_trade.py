@@ -229,34 +229,35 @@ def _fmt_forecast(agent_name, range_low, range_high):
     return f"{agent_name}: {range_low} — {range_high}"
 
 
-def _decide_from_persona(llm, agent_name, persona, seed_text):
-    """Generate trade decision directly from agent persona + market data (single LLM call)."""
-    parsed = llm.chat_json(
+def _forecast_from_persona(llm, agent_name, persona, world_seed, predict_hours):
+    """Generate price range forecast directly from agent persona + market data (single LLM call).
+    llm.chat() returns a plain string — we parse it directly with _parse_range.
+    """
+    response = llm.chat(
         messages=[
             {
                 "role": "system",
                 "content": (
                     f"You are {agent_name}, a trader with the following profile:\n{persona}\n\n"
-                    "Based on your personality and trading style, decide on a futures trade.\n\n"
-                    "Return JSON with exactly these fields:\n"
-                    '- direction: "LONG" or "SHORT"\n'
-                    '- order_type: "LIMIT" or "MARKET"\n'
-                    "- price: number (only for LIMIT orders, null for MARKET; must be near current market price)\n"
-                    "- size: number (position size, must be realistic)\n"
-                    "- leverage: integer (1-100)"
+                    "Based on your personality and trading style, predict the price range.\n\n"
+                    "**CRITICAL: You MUST respond with EXACTLY two numbers separated by a comma. "
+                    "Nothing else. No words, no explanation, no punctuation other than the comma "
+                    "and decimal point.**\n"
+                    "Format: range_low,range_high"
                 )
             },
             {
                 "role": "user",
                 "content": (
-                    f"Market data:\n{seed_text}\n\n"
-                    "What is your trade decision? Return only JSON."
+                    f"Market data:\n{world_seed}\n\n"
+                    f"What is the price range for the next {predict_hours} hours? "
+                    "Respond with ONLY two numbers separated by a comma."
                 )
             }
         ],
         temperature=0.8
     )
-    return _validate_decision(parsed, agent_name)
+    return _parse_range(response)
 
 
 def _get_agent_profiles(base_url, simulation_id, session=None):
@@ -277,21 +278,18 @@ def _get_agent_profiles(base_url, simulation_id, session=None):
     raise RuntimeError("No agent profiles found")
 
 
-def _interview_agents(base_url, simulation_id, llm, seed_text, id_to_profile, platform, session=None):
-    """Interview agents via OASIS and parse responses into decisions (parallel)."""
+def _interview_agents(base_url, simulation_id, seed_text, predict_hours, id_to_profile, platform, session=None):
+    """Interview agents via OASIS for price range forecasts (parallel)."""
+    world_seed = strip_agents_section(seed_text)
     agent_count = len(id_to_profile)
 
     interview_prompt = (
-        "Here is the current market data:\n"
-        f"{seed_text}\n\n"
-        "Based on this market data and your discussions with other traders, "
-        "what is your trade decision? You MUST specify:\n"
-        "1. Direction: LONG or SHORT\n"
-        "2. Order type: LIMIT or MARKET\n"
-        "3. If LIMIT, what exact price? (must be near current market price)\n"
-        "4. Position size (be realistic)\n"
-        "5. Leverage (1x-100x)\n\n"
-        "Be specific with numbers. Give only ONE trade decision."
+        "Here is the current market context:\n"
+        f"{world_seed}\n\n"
+        f"Based on this data and your discussions, predict the price range for the next {predict_hours} hours.\n\n"
+        "**CRITICAL: You MUST respond with EXACTLY two numbers separated by a comma. "
+        "Nothing else. No words, no explanation, no punctuation other than the comma and decimal point.**\n"
+        "Format: range_low,range_high"
     )
 
     interview_timeout = max(60, agent_count * 15)
@@ -305,7 +303,6 @@ def _interview_agents(base_url, simulation_id, llm, seed_text, id_to_profile, pl
 
     raw_results = interview_result.get("result", {}).get("results", {})
 
-    # Collect valid responses for parallel parsing
     parse_tasks = []
     for idx, (key, interview) in enumerate(raw_results.items(), 1):
         agent_id = interview.get("agent_id")
@@ -319,61 +316,61 @@ def _interview_agents(base_url, simulation_id, llm, seed_text, id_to_profile, pl
 
         parse_tasks.append((idx, agent_name, response_text))
 
-    # Parse decisions in parallel
-    decisions = []
+    forecasts = []
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {
-            pool.submit(_parse_decision, llm, name, resp, seed_text): (idx, name)
+            pool.submit(_parse_range, resp): (idx, name)
             for idx, name, resp in parse_tasks
         }
         for future in as_completed(futures):
             idx, name = futures[future]
             try:
-                decision = future.result()
-                if decision:
-                    decisions.append(decision)
-                    print(f"  [{idx}/{agent_count}] {_fmt_decision(name, decision)}")
+                result = future.result()
+                if result:
+                    low, high = result
+                    forecasts.append({"name": name, "range_low": low, "range_high": high})
+                    print(f"  [{idx}/{agent_count}] {_fmt_forecast(name, low, high)}")
                 else:
-                    print(f"  [{idx}/{agent_count}] {name}: could not parse decision")
+                    print(f"  [{idx}/{agent_count}] {name}: could not parse forecast")
             except Exception as e:
                 print(f"  [{idx}/{agent_count}] {name}: parse error: {e}")
 
-    return decisions
+    return forecasts
 
 
-def _fallback_persona_decisions(llm, seed_text, id_to_profile):
-    """Generate trade decisions from agent personas when interview is unavailable (parallel)."""
+def _fallback_persona_decisions(llm, seed_text, id_to_profile, predict_hours):
+    """Generate price range forecasts from agent personas when interview is unavailable (parallel)."""
+    world_seed = strip_agents_section(seed_text)
     agent_count = len(id_to_profile)
 
-    print(f"  Falling back to persona-based decisions for {agent_count} agents")
+    print(f"  Falling back to persona-based forecasts for {agent_count} agents")
 
-    # Build task list
     tasks = []
     for idx, (agent_id, profile) in enumerate(id_to_profile.items(), 1):
         agent_name = profile.get("name", profile.get("user_name", f"agent_{agent_id}"))
         persona = profile.get("persona", profile.get("bio", ""))
         tasks.append((idx, agent_name, persona))
 
-    # Run in parallel
-    decisions = []
+    forecasts = []
     with ThreadPoolExecutor(max_workers=5) as pool:
         futures = {
-            pool.submit(_decide_from_persona, llm, name, persona, seed_text): (idx, name)
+            pool.submit(_forecast_from_persona, llm, name, persona, world_seed, predict_hours): (idx, name)
             for idx, name, persona in tasks
         }
         for future in as_completed(futures):
             idx, name = futures[future]
             try:
-                decision = future.result()
-                if decision:
-                    decisions.append(decision)
-                    print(f"  [{idx}/{agent_count}] {_fmt_decision(name, decision)}")
+                result = future.result()
+                if result:
+                    low, high = result
+                    forecasts.append({"name": name, "range_low": low, "range_high": high})
+                    print(f"  [{idx}/{agent_count}] {_fmt_forecast(name, low, high)}")
                 else:
-                    print(f"  [{idx}/{agent_count}] {name}: could not parse decision")
+                    print(f"  [{idx}/{agent_count}] {name}: could not parse forecast")
             except Exception as e:
                 print(f"  [{idx}/{agent_count}] {name}: error: {e}")
 
-    return decisions
+    return forecasts
 
 
 def step5_interview_for_trades(base_url, simulation_id, llm, seed_text, session=None):
