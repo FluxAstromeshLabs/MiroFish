@@ -6,7 +6,39 @@
 
 **Architecture:** All changes are confined to `backend/scripts/run_trade.py` and a new test file `backend/scripts/test_run_trade.py`. Helper functions (`extract_latest_timestamp`, `strip_agents_section`, `_parse_range`) are pure and unit-testable. The interview/fallback logic and CSV writer are updated in-place.
 
-**Tech Stack:** Python 3.10+, pytest, existing `LLMClient`, existing Flask API via `requests`
+**Tech Stack:** Python 3.10+, pytest, existing `LLMClient` (`llm.chat()` returns plain string), existing Flask API via `requests`
+
+---
+
+## Seed format reference
+
+```
+# OHLCV
+
+## 1H
+Date/Time        |       Open |       High |        Low |      Close |       Volume
+2026-04-06 23:00 |  68,777.00 |  68,871.90 |  68,227.50 |  68,817.90 |    10,845.19
+2026-04-06 22:00 |  ...
+...
+
+## 4H
+...
+
+## 1D
+...
+
+# Liquidations
+...
+
+# News
+...
+
+# Agents Population
+- quant1: Analytical, data-driven...
+- scalper1: Hyper-focused...
+```
+
+Rows in each OHLCV timeframe are **newest-first**. `# Agents Population` is always the last section.
 
 ---
 
@@ -36,16 +68,28 @@ from run_trade import strip_agents_section
 
 
 def test_strip_agents_section_removes_section():
-    seed = "# Market Data\nprice: 80000\n\n# Agents Population\nagent1\nagent2\n"
+    seed = (
+        "# OHLCV\n\n"
+        "## 1H\n"
+        "Date/Time        |       Open |\n"
+        "2026-04-06 23:00 |  68,777.00 |\n\n"
+        "# Liquidations\n"
+        "Last |  Long liq |  Short liq\n"
+        "1h   |   $231.0K |    $764.7K\n\n"
+        "# Agents Population\n"
+        "- quant1: Analytical, data-driven\n"
+        "- scalper1: Hyper-focused\n"
+    )
     result = strip_agents_section(seed)
     assert "# Agents Population" not in result
-    assert "agent1" not in result
-    assert "# Market Data" in result
-    assert "price: 80000" in result
+    assert "quant1" not in result
+    assert "# OHLCV" in result
+    assert "# Liquidations" in result
+    assert "68,777.00" in result
 
 
 def test_strip_agents_section_no_section():
-    seed = "# Market Data\nprice: 80000\n"
+    seed = "# OHLCV\n\n## 1H\nDate/Time | Open |\n2026-04-06 23:00 | 68777 |\n"
     result = strip_agents_section(seed)
     assert result == seed
 
@@ -107,7 +151,7 @@ from run_trade import extract_latest_timestamp
 
 
 def test_extract_latest_timestamp_from_ohlcv_table():
-    # Rows are newest-first; first data row after header is the latest candle
+    # Rows are newest-first; first data row under ## 1H is the latest candle
     seed = (
         "# OHLCV\n\n"
         "## 1H\n"
@@ -119,9 +163,9 @@ def test_extract_latest_timestamp_from_ohlcv_table():
     assert extract_latest_timestamp(seed) == 1775516400
 
 
-def test_extract_latest_timestamp_no_table():
+def test_extract_latest_timestamp_no_ohlcv_section():
     import time
-    seed = "# Market Data\nno timestamps here\n"
+    seed = "# Liquidations\nLast |  Long liq\n1h   |   $231.0K\n"
     result = extract_latest_timestamp(seed)
     assert abs(result - int(time.time())) < 5
 
@@ -146,7 +190,7 @@ Expected: `ImportError` or `AttributeError`.
 
 - [ ] **Step 3: Add `extract_latest_timestamp` to `run_trade.py`**
 
-Add after `strip_agents_section`. Also add `import re` and `from datetime import datetime, timezone` at the top of the file alongside the existing imports.
+Add `import re` and `from datetime import datetime, timezone` at the top of the file alongside the existing imports. Then add the function after `strip_agents_section`:
 
 ```python
 def extract_latest_timestamp(seed_text):
@@ -154,16 +198,12 @@ def extract_latest_timestamp(seed_text):
 
     The seed's 1H table lists rows newest-first in the format:
         2026-04-06 23:00 |  68,777.00 | ...
-    We find the first such row after the '## 1H' header.
+    We find the first data row after the '## 1H' header.
     """
-    import re
-    from datetime import datetime, timezone
-
-    # Find the ## 1H section first
     match = re.search(
-        r'## 1H\n'                          # section header
-        r'Date/Time[^\n]*\n'                # column header row
-        r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2})',  # first data row timestamp
+        r'## 1H\n'
+        r'Date/Time[^\n]*\n'
+        r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2})',
         seed_text
     )
     if match:
@@ -232,8 +272,8 @@ def test_parse_range_zero_invalid():
 
 
 def test_fmt_forecast():
-    result = _fmt_forecast("Alice", 83000.5, 85200.0)
-    assert "Alice" in result
+    result = _fmt_forecast("quant1", 83000.5, 85200.0)
+    assert "quant1" in result
     assert "83000.5" in result
     assert "85200.0" in result
 ```
@@ -299,7 +339,9 @@ Remove `_decide_from_persona` entirely and replace with:
 
 ```python
 def _forecast_from_persona(llm, agent_name, persona, world_seed, predict_hours):
-    """Generate price range forecast directly from agent persona + market data (single LLM call)."""
+    """Generate price range forecast directly from agent persona + market data (single LLM call).
+    llm.chat() returns a plain string — we parse it directly with _parse_range.
+    """
     response = llm.chat(
         messages=[
             {
@@ -326,8 +368,6 @@ def _forecast_from_persona(llm, agent_name, persona, world_seed, predict_hours):
     )
     return _parse_range(response)
 ```
-
-> **Note on `llm.chat` vs `llm.chat_json`:** The old `_decide_from_persona` used `llm.chat_json`. Since we now parse the response as a plain string (not JSON), use `llm.chat` instead. Check `app/utils/llm_client.py` — if `chat` doesn't exist, use `chat_json` and call `str()` on the result, or use whatever method returns a plain string response.
 
 - [ ] **Step 2: Update `_fallback_persona_decisions` to use new function**
 
@@ -467,32 +507,6 @@ git commit -m "feat: update _interview_agents to collect price range forecasts"
 Replace the existing function with:
 
 ```python
-def step5_interview_for_trades(base_url, simulation_id, seed_text, predict_hours, session=None):
-    """Interview each agent for price range forecast, return list of forecast dicts."""
-    print("[Step 5/5] Interviewing agents for price forecasts...")
-
-    id_to_profile, platform = _get_agent_profiles(base_url, simulation_id, session=session)
-    agent_count = len(id_to_profile)
-
-    run_status = api("get", base_url, f"/api/simulation/{simulation_id}/run-status", session=session)
-    env_alive = run_status.get("runner_status") not in ("stopped", "failed", "idle")
-
-    if env_alive:
-        print(f"  Found {agent_count} agents (platform: {platform}) — trying OASIS interview...")
-        try:
-            forecasts = _interview_agents(base_url, simulation_id, seed_text, predict_hours,
-                                          id_to_profile, platform, session=session)
-            if forecasts:
-                return forecasts
-        except Exception as e:
-            print(f"  Interview failed: {e}")
-
-    return _fallback_persona_decisions(None, seed_text, id_to_profile, predict_hours)
-```
-
-> **Note:** The fallback no longer needs `llm` for persona-based forecasts — wait, it does. Keep passing `llm` in. The signature above is wrong — fix the call: `_fallback_persona_decisions(llm, seed_text, id_to_profile, predict_hours)`. The `llm` object must be passed down from `main`. Update the function signature of `step5_interview_for_trades` to accept `llm` as well:
-
-```python
 def step5_interview_for_trades(base_url, simulation_id, llm, seed_text, predict_hours, session=None):
     """Interview each agent for price range forecast, return list of forecast dicts."""
     print("[Step 5/5] Interviewing agents for price forecasts...")
@@ -540,9 +554,7 @@ def write_csv(forecasts, output_path, start_timestamp, predict_hours):
 
 - [ ] **Step 3: Update `main`**
 
-In `main()`:
-
-1. Replace `--rounds` argument block — add `--predict-hours`:
+In `main()`, add `--predict-hours` alongside the existing `--rounds` argument:
 
 ```python
 parser.add_argument("--predict-hours", type=int, default=12,
@@ -551,7 +563,7 @@ parser.add_argument("--rounds", type=int, default=15,
                     help="Max simulation rounds (default: 15)")
 ```
 
-2. Update the step 5 call and CSV write at the bottom of `main()`:
+Replace the step 5 call and output block at the bottom of `main()`:
 
 ```python
 forecasts = step5_interview_for_trades(args.base_url, simulation_id, llm, seed_text,
@@ -606,7 +618,7 @@ Expected output includes:
 - [ ] **Step 2: Check for any remaining references to old functions**
 
 ```bash
-grep -n "_parse_decision\|_validate_decision\|_fmt_decision\|_decide_from_persona\|write_csv.*direction\|\"direction\"\|\"order_type\"\|\"leverage\"" backend/scripts/run_trade.py
+grep -n "_parse_decision\|_validate_decision\|_fmt_decision\|_decide_from_persona\|\"direction\"\|\"order_type\"\|\"leverage\"" backend/scripts/run_trade.py
 ```
 
 Expected: no matches.
