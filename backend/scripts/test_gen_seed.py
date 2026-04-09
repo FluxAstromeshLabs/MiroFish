@@ -62,3 +62,50 @@ def test_read_liq_csv_basic():
 
 def test_read_liq_csv_missing_file():
     assert read_liq_csv("/nonexistent/path.csv") == []
+
+# ── aggregate_1h ───────────────────────────────────────────────────────────
+from gen_seed import aggregate_1h
+
+# 3 one-minute candles: first two in 12:00 hour, one in 13:00 hour
+# T values: 2026-04-08 12:00, 12:01, 13:00 UTC
+_T_1200 = 1744113600000   # 2026-04-08 12:00 UTC
+_T_1201 = 1744113660000   # 2026-04-08 12:01 UTC
+_T_1300 = 1744117200000   # 2026-04-08 13:00 UTC
+
+_RAW = [
+    {"T": _T_1200, "O": 69000.0, "H": 69500.0, "L": 68900.0, "C": 69100.0, "V": 1.0},
+    {"T": _T_1201, "O": 69100.0, "H": 69600.0, "L": 69000.0, "C": 69200.0, "V": 2.0},
+    {"T": _T_1300, "O": 69200.0, "H": 69700.0, "L": 69100.0, "C": 69300.0, "V": 3.0},
+]
+
+def test_aggregate_1h_count():
+    result = aggregate_1h(_RAW)
+    assert len(result) == 2
+
+def test_aggregate_1h_open_is_first():
+    result = aggregate_1h(_RAW)
+    candle_1200 = next(c for c in result if c["T"] == _T_1200)
+    assert candle_1200["O"] == 69000.0
+
+def test_aggregate_1h_close_is_last():
+    result = aggregate_1h(_RAW)
+    candle_1200 = next(c for c in result if c["T"] == _T_1200)
+    assert candle_1200["C"] == 69200.0
+
+def test_aggregate_1h_high_is_max():
+    result = aggregate_1h(_RAW)
+    candle_1200 = next(c for c in result if c["T"] == _T_1200)
+    assert candle_1200["H"] == 69600.0
+
+def test_aggregate_1h_low_is_min():
+    result = aggregate_1h(_RAW)
+    candle_1200 = next(c for c in result if c["T"] == _T_1200)
+    assert candle_1200["L"] == 68900.0
+
+def test_aggregate_1h_volume_is_sum():
+    result = aggregate_1h(_RAW)
+    candle_1200 = next(c for c in result if c["T"] == _T_1200)
+    assert candle_1200["V"] == 3.0
+
+def test_aggregate_1h_empty():
+    assert aggregate_1h([]) == []

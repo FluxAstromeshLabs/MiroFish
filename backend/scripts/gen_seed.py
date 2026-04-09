@@ -71,6 +71,33 @@ def read_liq_csv(path: str) -> list[dict]:
     return rows
 
 
+def aggregate_1h(rows: list[dict]) -> list[dict]:
+    """
+    Aggregate 1-minute OHLCV rows into 1H candles.
+    Each row: {T (ms), O, H, L, C, V}. T of output candle = floor to hour start.
+    Returns list sorted by T ascending.
+    """
+    buckets: dict[int, dict] = {}
+    for row in sorted(rows, key=lambda r: r["T"]):
+        hour_start_ms = (row["T"] // 3_600_000) * 3_600_000
+        if hour_start_ms not in buckets:
+            buckets[hour_start_ms] = {
+                "T": hour_start_ms,
+                "O": row["O"],
+                "H": row["H"],
+                "L": row["L"],
+                "C": row["C"],
+                "V": row["V"],
+            }
+        else:
+            b = buckets[hour_start_ms]
+            b["H"] = max(b["H"], row["H"])
+            b["L"] = min(b["L"], row["L"])
+            b["C"] = row["C"]
+            b["V"] += row["V"]
+    return sorted(buckets.values(), key=lambda c: c["T"])
+
+
 # ── Formatters ─────────────────────────────────────────────────────────────
 
 def _fmt_dollar(val):
