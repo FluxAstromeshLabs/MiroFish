@@ -160,3 +160,51 @@ def test_load_liq_window_sums(tmp_path):
 def test_load_liq_window_empty(tmp_path):
     result = load_liq_window(str(tmp_path), _END_DT, hours=2)
     assert result == {"long": 0.0, "short": 0.0}
+
+
+# ── new formatters ─────────────────────────────────────────────────────────
+from gen_seed import format_chart_time, format_btc_price, format_ohlcv_json, format_liquidations_json
+
+_CANDLES = [
+    {"T": 1775649600000, "O": 69000.0, "H": 69500.0, "L": 68900.0, "C": 69100.0, "V": 5.5},
+    {"T": 1775653200000, "O": 69100.0, "H": 69600.0, "L": 69000.0, "C": 69200.0, "V": 3.2},
+]
+
+def test_format_chart_time():
+    dt = datetime(2026, 4, 8, 12, tzinfo=timezone.utc)
+    assert format_chart_time(dt) == "# Latest Chart Time\n2026-04-08 12:00"
+
+def test_format_btc_price():
+    # last candle newest-first is _CANDLES[1] after sort, close=69200
+    assert format_btc_price(_CANDLES) == "# Latest BTC Price\n69200.0"
+
+def test_format_ohlcv_json_section_header():
+    result = format_ohlcv_json(_CANDLES)
+    assert result.startswith("# OHLCV 1H")
+
+def test_format_ohlcv_json_is_valid_json():
+    result = format_ohlcv_json(_CANDLES)
+    json_part = result[result.index("["):]
+    parsed = json.loads(json_part)
+    assert len(parsed) == 2
+
+def test_format_ohlcv_json_newest_first():
+    result = format_ohlcv_json(_CANDLES)
+    json_part = result[result.index("["):]
+    parsed = json.loads(json_part)
+    assert parsed[0]["time"] == "2026-04-08 13:00"
+    assert parsed[1]["time"] == "2026-04-08 12:00"
+
+def test_format_ohlcv_json_fields():
+    result = format_ohlcv_json(_CANDLES)
+    json_part = result[result.index("["):]
+    parsed = json.loads(json_part)
+    assert set(parsed[0].keys()) == {"time", "open", "high", "low", "close", "volume"}
+
+def test_format_liquidations_json():
+    result = format_liquidations_json({"long": 3_200_000.0, "short": 1_400_000.0})
+    assert result.startswith("# Liquidations")
+    json_part = result[result.index("{"):]
+    parsed = json.loads(json_part)
+    assert parsed["long"] == 3_200_000.0
+    assert parsed["short"] == 1_400_000.0
