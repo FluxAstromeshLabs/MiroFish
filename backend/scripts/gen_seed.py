@@ -167,20 +167,20 @@ def format_btc_price(candles_1h: list[dict]) -> str:
 
 
 def format_ohlcv_json(candles_1h: list[dict]) -> str:
-    """Render 1H candles as JSON array, newest-first."""
-    sorted_candles = sorted(candles_1h, key=lambda c: c["T"], reverse=True)
-    items = []
-    for c in sorted_candles:
-        dt = datetime.fromtimestamp(c["T"] / 1000, tz=timezone.utc)
-        items.append({
-            "time": dt.strftime("%Y-%m-%d %H:%M"),
-            "open": c["O"],
-            "high": c["H"],
-            "low": c["L"],
-            "close": c["C"],
-            "volume": round(c["V"], 2),
-        })
-    return "# OHLCV 1H\n" + json.dumps(items, indent=2)
+    """Render latest 1H candle as single JSON object."""
+    if not candles_1h:
+        return "# OHLCV 1H\n{}"
+    latest = max(candles_1h, key=lambda c: c["T"])
+    dt = datetime.fromtimestamp(latest["T"] / 1000, tz=timezone.utc)
+    obj = {
+        "time": dt.strftime("%Y-%m-%d %H:%M"),
+        "open": latest["O"],
+        "high": latest["H"],
+        "low": latest["L"],
+        "close": latest["C"],
+        "volume": round(latest["V"], 2),
+    }
+    return "# OHLCV 1H\n" + json.dumps(obj)
 
 
 def format_liquidations_json(liq: dict) -> str:
@@ -188,8 +188,17 @@ def format_liquidations_json(liq: dict) -> str:
     return "# Liquidations\n" + json.dumps({"long": liq["long"], "short": liq["short"]})
 
 
-def format_news() -> str:
-    return "# News\n(no news)"
+def load_news(news_dir: str, end_dt: datetime, hours: int) -> str:
+    """Load news from news/YYYY-MM-DDTHH.md file if it exists."""
+    news_file = os.path.join(news_dir, end_dt.strftime("%Y-%m-%dT%H.md"))
+    if os.path.exists(news_file):
+        with open(news_file, "r") as f:
+            return f.read().strip()
+    return "(no news)"
+
+
+def format_news(news_content: str) -> str:
+    return f"# News\n{news_content}"
 
 
 # ── Agents ─────────────────────────────────────────────────────────────────
@@ -227,10 +236,13 @@ def main():
                         help="Optional agents file path (default: <project_root>/agents.txt)")
     parser.add_argument("--output-dir", default=None,
                         help="Directory for output seed files (default: seeds/)")
+    parser.add_argument("--news", default=None,
+                        help="Path to news directory (default: <project_root>/news)")
     args = parser.parse_args()
 
     marketdata_dir = resolve_path(args.marketdata or "marketdata")
     output_dir = resolve_path(args.output_dir or "seeds")
+    news_dir = resolve_path(args.news or "news")
     os.makedirs(output_dir, exist_ok=True)
 
     end_dt = parse_hour(args.end_hour)
@@ -257,13 +269,14 @@ def main():
 
         candles = load_ohlcv_window(marketdata_dir, seed_end, args.hours)
         liq = load_liq_window(marketdata_dir, seed_end, args.hours)
+        news_content = load_news(news_dir, seed_end, args.hours)
 
         content = "\n\n".join([
             format_chart_time(seed_end),
             format_btc_price(candles),
             format_ohlcv_json(candles),
             format_liquidations_json(liq),
-            format_news(),
+            format_news(news_content),
             "# Agents Population\n" + agents_text,
         ]) + "\n"
 
