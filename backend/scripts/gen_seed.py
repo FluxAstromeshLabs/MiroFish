@@ -167,20 +167,21 @@ def format_btc_price(candles_1h: list[dict]) -> str:
 
 
 def format_ohlcv_json(candles_1h: list[dict]) -> str:
-    """Render latest 1H candle as single JSON object."""
-    if not candles_1h:
-        return "# OHLCV 1H\n{}"
-    latest = max(candles_1h, key=lambda c: c["T"])
-    dt = datetime.fromtimestamp(latest["T"] / 1000, tz=timezone.utc)
-    obj = {
-        "time": dt.strftime("%Y-%m-%d %H:%M"),
-        "open": latest["O"],
-        "high": latest["H"],
-        "low": latest["L"],
-        "close": latest["C"],
-        "volume": round(latest["V"], 2),
-    }
-    return "# OHLCV 1H\n" + json.dumps(obj)
+    """Render all 1H candles as JSON array, one object per line."""
+    sorted_candles = sorted(candles_1h, key=lambda c: c["T"], reverse=True)
+    items = []
+    for c in sorted_candles:
+        dt = datetime.fromtimestamp(c["T"] / 1000, tz=timezone.utc)
+        obj = {
+            "time": dt.strftime("%Y-%m-%d %H:%M"),
+            "open": c["O"],
+            "high": c["H"],
+            "low": c["L"],
+            "close": c["C"],
+            "volume": round(c["V"], 2),
+        }
+        items.append(json.dumps(obj, separators=(',', ': ')))
+    return "# OHLCV 1H\n[\n  " + ",\n  ".join(items) + "\n]"
 
 
 def format_liquidations_json(liq: dict) -> str:
