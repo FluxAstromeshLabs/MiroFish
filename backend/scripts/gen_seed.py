@@ -280,69 +280,67 @@ def main():
     _now = datetime.now(tz=timezone.utc)
     _default_hour = _now.strftime("%Y-%m-%dT%H")
 
-    parser = argparse.ArgumentParser(description="gen_seed — Flux API → seed.md (BTC Futures)")
-    parser.add_argument("--base-url", default="http://localhost:8080",
-                        help="Flux exchange base URL (default: http://localhost:8080)")
-    parser.add_argument("--hour", default=_default_hour,
-                        help="Ending hour YYYY-MM-DDTHH in UTC (default: current hour)")
+    parser = argparse.ArgumentParser(description="gen_seed — marketdata CSV → seed.md (BTC Futures)")
+    parser.add_argument("--end-hour", default=_default_hour,
+                        help="End hour of the last seed YYYY-MM-DDTHH in UTC (default: current hour)")
     parser.add_argument("--hours", type=int, default=72,
-                        help="Hours of history to include (default: 72)")
-    parser.add_argument("--agents", default=None, help="Optional agents file path")
-    parser.add_argument("-o", "--output", default="seed.md",
-                        help="Output path (default: seed.md at project root)")
+                        help="Hours of history per seed (default: 72)")
+    parser.add_argument("--count", type=int, default=1,
+                        help="Number of seeds to generate, each shifted back by --step hours (default: 1)")
+    parser.add_argument("--step", type=int, default=1,
+                        help="Hour shift between seeds (default: 1)")
+    parser.add_argument("--marketdata", default=None,
+                        help="Path to marketdata directory (default: <project_root>/marketdata)")
+    parser.add_argument("--agents", default=None,
+                        help="Optional agents file path (default: <project_root>/agents.txt)")
+    parser.add_argument("--output-dir", default=None,
+                        help="Directory for output seed files (default: project root)")
     args = parser.parse_args()
 
-    args.output = resolve_path(args.output)
-    base = args.base_url
-    end_dt = parse_hour(args.hour)
-    n = args.hours
+    marketdata_dir = resolve_path(args.marketdata or "marketdata")
+    output_dir = resolve_path(args.output_dir or ".")
+    os.makedirs(output_dir, exist_ok=True)
 
-    _, end_ms = hour_bounds_ms(end_dt)
-    start_dt = end_dt - timedelta(hours=n - 1)
-    start_ms, _ = hour_bounds_ms(start_dt)
+    end_dt = parse_hour(args.end_hour)
+    agents_text = load_agents(args.agents)
 
-    print("gen_seed — Flux API → seed.md (BTC Futures)")
-    print(f"  Base URL : {base}")
-    print(f"  Hour     : {args.hour}  ({n} hours)")
-    print(f"  Output   : {args.output}")
+    # Seeds: end_dt - (count-1)*step, ..., end_dt - step, end_dt
+    seed_end_times = [
+        end_dt - timedelta(hours=(args.count - 1 - i) * args.step)
+        for i in range(args.count)
+    ]
+
+    print(f"gen_seed — marketdata CSV → seed.md")
+    print(f"  Marketdata : {marketdata_dir}")
+    print(f"  Output dir : {output_dir}")
+    print(f"  Seeds      : {args.count}  (step={args.step}h, window={args.hours}h each)")
     print()
 
-    # Fetch OHLCV for the full window in one call per bucket
-    print(f"  OHLCV 1D ...", end=" ", flush=True)
-    items_1d = fetch_ohlcv(base, "1d", start_ms, end_ms)
-    print(len(items_1d))
+    for seed_end in seed_end_times:
+        label = seed_end.strftime("%Y-%m-%dT%H")
+        filename = "seed.md" if args.count == 1 else f"seed_{label}.md"
+        out_path = os.path.join(output_dir, filename)
 
-    print(f"  OHLCV 4H ...", end=" ", flush=True)
-    items_4h = fetch_ohlcv(base, "4h", start_ms, end_ms)
-    print(len(items_4h))
+        print(f"  Generating {label} ...", end=" ", flush=True)
 
-    print(f"  OHLCV 1H ...", end=" ", flush=True)
-    items_1h = fetch_ohlcv(base, "1h", start_ms, end_ms)
-    print(len(items_1h))
+        candles = load_ohlcv_window(marketdata_dir, seed_end, args.hours)
+        liq = load_liq_window(marketdata_dir, seed_end, args.hours)
 
-    # Fetch liquidations (4 fixed windows relative to end hour)
-    liq_windows = {"1h": 3_600_000, "4h": 14_400_000, "12h": 43_200_000, "24h": 86_400_000}
-    liq_data = {}
-    for label, offset_ms in liq_windows.items():
-        liq_data[label] = fetch_liquidations(base, end_ms - offset_ms, end_ms)
+        content = "\n\n".join([
+            format_chart_time(seed_end),
+            format_btc_price(candles),
+            format_ohlcv_json(candles),
+            format_liquidations_json(liq),
+            format_news(),
+            "# Agents Population\n" + agents_text,
+        ]) + "\n"
 
-    # Fetch news over the full N-hour window
-    print(f"  News {start_dt.strftime('%Y-%m-%dT%H')} → {args.hour} ...", end=" ", flush=True)
-    news_items = fetch_news(base, start_ms, end_ms)
-    print(len(news_items), "items")
+        with open(out_path, "w") as f:
+            f.write(content)
 
-    # Assemble seed
-    content = "\n\n".join([
-        format_ohlcv(items_1d, items_4h, items_1h),
-        format_liquidations(liq_data),
-        format_news(news_items),
-        "# Agents Population\n" + load_agents(args.agents),
-    ]) + "\n"
+        print(f"{len(candles)} candles → {filename}")
 
-    with open(args.output, "w") as f:
-        f.write(content)
-
-    print(f"\nWritten: {args.output}")
+    print("\nDone.")
 
 
 if __name__ == "__main__":
