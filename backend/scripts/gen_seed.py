@@ -98,6 +98,62 @@ def aggregate_1h(rows: list[dict]) -> list[dict]:
     return sorted(buckets.values(), key=lambda c: c["T"])
 
 
+def _days_in_window(end_dt: datetime, hours: int) -> list[str]:
+    """Return list of YYYY-MM-DD strings for all calendar days (UTC) that overlap the window."""
+    start_dt = end_dt - timedelta(hours=hours - 1)
+    days = []
+    cur = start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_day = end_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    while cur <= end_day:
+        days.append(cur.strftime("%Y-%m-%d"))
+        cur += timedelta(days=1)
+    return days
+
+
+def load_ohlcv_window(marketdata_dir: str, end_dt: datetime, hours: int) -> list[dict]:
+    """
+    Load and aggregate 1H candles from marketdata CSVs for the window
+    [end_dt - hours + 1h, end_dt] (inclusive). Returns list of 1H candle dicts.
+    """
+    start_dt = end_dt - timedelta(hours=hours - 1)
+    start_ms = int(start_dt.replace(minute=0, second=0, microsecond=0).timestamp() * 1000)
+    end_ms = int(end_dt.replace(minute=0, second=0, microsecond=0).timestamp() * 1000) + 3_599_999
+
+    raw = []
+    for day in _days_in_window(end_dt, hours):
+        path = os.path.join(marketdata_dir, day, "ohlcv.csv")
+        for row in read_ohlcv_csv(path):
+            if start_ms <= row["T"] <= end_ms:
+                raw.append(row)
+
+    return aggregate_1h(raw)
+
+
+def load_liq_window(marketdata_dir: str, end_dt: datetime, hours: int) -> dict:
+    """
+    Sum long and short liquidations from liq CSVs over the window.
+    SELL rows = long liquidations; BUY rows = short liquidations.
+    Returns {"long": float, "short": float}.
+    """
+    start_dt = end_dt - timedelta(hours=hours - 1)
+    start_ms = int(start_dt.replace(minute=0, second=0, microsecond=0).timestamp() * 1000)
+    end_ms = int(end_dt.replace(minute=0, second=0, microsecond=0).timestamp() * 1000) + 3_599_999
+
+    total_long = 0.0
+    total_short = 0.0
+    for day in _days_in_window(end_dt, hours):
+        path = os.path.join(marketdata_dir, day, "liq.csv")
+        for row in read_liq_csv(path):
+            if start_ms <= row["T"] <= end_ms:
+                value = row["q"] * row["p"]
+                if row["S"] == "SELL":
+                    total_long += value
+                else:
+                    total_short += value
+
+    return {"long": total_long, "short": total_short}
+
+
 # ── Formatters ─────────────────────────────────────────────────────────────
 
 def _fmt_dollar(val):

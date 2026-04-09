@@ -109,3 +109,54 @@ def test_aggregate_1h_volume_is_sum():
 
 def test_aggregate_1h_empty():
     assert aggregate_1h([]) == []
+
+
+# ── load_ohlcv_window / load_liq_window ───────────────────────────────────
+from gen_seed import load_ohlcv_window, load_liq_window
+
+def _make_marketdata(tmp_path, day_str, ohlcv_rows=None, liq_rows=None):
+    """Helper: create a marketdata/YYYY-MM-DD/ dir with optional CSV files."""
+    day_dir = os.path.join(str(tmp_path), day_str)
+    os.makedirs(day_dir, exist_ok=True)
+    if ohlcv_rows is not None:
+        with open(os.path.join(day_dir, "ohlcv.csv"), "w") as f:
+            f.write("T,O,H,L,C,V\n")
+            for r in ohlcv_rows:
+                f.write(",".join(str(x) for x in r) + "\n")
+    if liq_rows is not None:
+        with open(os.path.join(day_dir, "liq.csv"), "w") as f:
+            f.write("S,o,f,q,p,ap,X,l,z,T\n")
+            for r in liq_rows:
+                f.write(",".join(str(x) for x in r) + "\n")
+    return tmp_path
+
+# end_dt = 2026-04-08 12:00 UTC, hours=2 → window: 11:00–12:00
+_END_DT = datetime(2026, 4, 8, 12, 0, 0, tzinfo=timezone.utc)
+_T_1100 = 1775646000000   # 2026-04-08 11:00 UTC
+_T_1200 = 1775649600000   # 2026-04-08 12:00 UTC
+
+def test_load_ohlcv_window_filters_by_time(tmp_path):
+    _make_marketdata(tmp_path, "2026-04-08", ohlcv_rows=[
+        [_T_1100, 69000, 69500, 68900, 69100, 1.0],   # in window
+        [_T_1200, 69100, 69600, 69000, 69200, 2.0],   # in window
+        [1775656800000, 69200, 69700, 69100, 69300, 3.0],  # 14:00 — out of window
+    ])
+    result = load_ohlcv_window(str(tmp_path), _END_DT, hours=2)
+    assert len(result) == 2
+
+def test_load_ohlcv_window_missing_dir(tmp_path):
+    result = load_ohlcv_window(str(tmp_path), _END_DT, hours=2)
+    assert result == []
+
+def test_load_liq_window_sums(tmp_path):
+    _make_marketdata(tmp_path, "2026-04-08", liq_rows=[
+        ["SELL", "LIMIT", "IOC", 0.5, 69000, 69000, "FILLED", 0.5, 0.5, _T_1100],  # long liq
+        ["BUY",  "LIMIT", "IOC", 1.0, 68000, 68000, "FILLED", 1.0, 1.0, _T_1200],  # short liq
+    ])
+    result = load_liq_window(str(tmp_path), _END_DT, hours=2)
+    assert abs(result["long"]  - 0.5 * 69000) < 0.01
+    assert abs(result["short"] - 1.0 * 68000) < 0.01
+
+def test_load_liq_window_empty(tmp_path):
+    result = load_liq_window(str(tmp_path), _END_DT, hours=2)
+    assert result == {"long": 0.0, "short": 0.0}
