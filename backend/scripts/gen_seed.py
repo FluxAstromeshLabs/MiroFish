@@ -10,8 +10,6 @@ from datetime import datetime, timezone, timedelta
 import csv
 import json
 
-import requests
-
 from common import project_root, resolve_path
 
 
@@ -194,73 +192,7 @@ def format_news() -> str:
     return "# News\n(no news)"
 
 
-# ── API fetchers ───────────────────────────────────────────────────────────
-
-def fetch_ohlcv(base_url, bucket, start_ms, end_ms):
-    """
-    GET /api/v1/history/ohlcv?bucket=<bucket>&start=<ms>&end=<ms>
-    Returns list of item dicts with open_time_ms, open, high, low, close, volume.
-    """
-    resp = requests.get(
-        f"{base_url}/api/v1/history/ohlcv",
-        params={"bucket": bucket, "start": start_ms, "end": end_ms},
-        timeout=15,
-    )
-    resp.raise_for_status()
-    return resp.json().get("items", [])
-
-
-def fetch_liquidations(base_url, start_ms, end_ms):
-    """
-    GET /api/v1/history/liquidations?start=<ms>&end=<ms>
-    Returns dict with total_long, total_short, count, items.
-    """
-    resp = requests.get(
-        f"{base_url}/api/v1/history/liquidations",
-        params={"start": start_ms, "end": end_ms},
-        timeout=15,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def fetch_news(base_url, start_ms, end_ms):
-    """
-    GET /api/v1/history/news?start=<ms>&end=<ms>
-    Returns list of item dicts with timestamp_ms and content.
-    """
-    resp = requests.get(
-        f"{base_url}/api/v1/history/news",
-        params={"start": start_ms, "end": end_ms},
-        timeout=15,
-    )
-    resp.raise_for_status()
-    return resp.json().get("items", [])
-
-
 # ── Agents ─────────────────────────────────────────────────────────────────
-
-DEFAULT_AGENTS = """\
-- quant1: Analytical, data-driven, emotionally detached. Trusts numbers over intuition.
-- quant2: Methodical and process-oriented. Uncomfortable with ambiguity, relies on repeatable systems.
-- swing1: Patient, reads macro structure. Waits for conviction before committing.
-- swing2: Trend-follower with a high tolerance for drawdown. Holds through noise.
-- scalper1: Hyper-focused, reactive, lives in the short-term. Dislikes overnight exposure.
-- scalper2: Competitive and fast-twitch. Treats every tick as an opportunity.
-- whale1: Methodical and private. Moves quietly, thinks in large time horizons.
-- whale2: Deliberate and patient. Rarely overreacts, hard to rattle.
-- news1: Macro-aware and well-read. Connects headline dots faster than most.
-- news2: Alert and always plugged in. First to react to crypto-native developments.
-- degen1: Impulsive and overconfident. Thrives on volatility, hates sitting on the sidelines.
-- degen2: Risk-blind and excitement-driven. Chases action more than outcomes.
-- hodler1: Patient and conviction-driven. Tunes out short-term noise.
-- contrarian1: Skeptical of consensus. Comfortable being the only one taking the opposite view.
-- retail1: Easily influenced, reactive to price moves and social feeds.
-- kol1 (KOL, 2.1M followers): Hype-driven, high-energy, large retail audience. Posts frequently and amplifies momentum.
-- kol2 (KOL, 420K followers): Measured and data-heavy. Institutional-leaning audience, focuses on evidence over emotion.
-- kol3 (KOL, 95K followers): Niche on-chain specialist. Small but highly technical and loyal following.
-- kol4 (KOL, 1.8M followers): Macro-first thinker. Bridges TradFi and crypto, commands credibility across both.
-- kol5 (KOL, 31K followers): Contrarian voice. Often goes against popular takes, niche but devoted community."""
 
 
 def load_agents(agents_path=None):
@@ -271,7 +203,7 @@ def load_agents(agents_path=None):
     if os.path.exists(default):
         with open(default) as f:
             return f.read().strip()
-    return DEFAULT_AGENTS
+    return ""  # Empty fallback if agents.txt not found
 
 
 # ── Main ───────────────────────────────────────────────────────────────────
@@ -294,11 +226,11 @@ def main():
     parser.add_argument("--agents", default=None,
                         help="Optional agents file path (default: <project_root>/agents.txt)")
     parser.add_argument("--output-dir", default=None,
-                        help="Directory for output seed files (default: project root)")
+                        help="Directory for output seed files (default: seeds/)")
     args = parser.parse_args()
 
     marketdata_dir = resolve_path(args.marketdata or "marketdata")
-    output_dir = resolve_path(args.output_dir or ".")
+    output_dir = resolve_path(args.output_dir or "seeds")
     os.makedirs(output_dir, exist_ok=True)
 
     end_dt = parse_hour(args.end_hour)
