@@ -128,7 +128,8 @@ ZEP_API_KEY=your_zep_api_key
 ```
 
 #### 2. Install Dependencies
-
+echo 'export PATH="$HOME/snap/code/231/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```bash
 # One-click installation of all dependencies (root + frontend + backend)
 npm run setup:all

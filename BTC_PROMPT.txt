@@ -1,0 +1,2 @@
+Based on current market conditions (BTC at ~$89,300, Fear & Greed at 24, risk-off macro environment), simulate agent interactions over Jan 29–31. At the end of each simulated day, agents must reach a consensus and output a single specific closing price in USD.
+Final output must be exactly: Jan 29 close: $X, Jan 30 close: $X, Jan 31 close: $X.

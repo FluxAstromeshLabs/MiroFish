@@ -78,6 +78,24 @@ def extract_latest_timestamp(seed_text):
     return int(time.time())
 
 
+def extract_timestamp_from_seed_path(seed_path):
+    """Extract Unix seconds from seed filename pattern: seed_YYYY-MM-DDTHH.md.
+
+    Returns None if pattern is not matched.
+    """
+    base = os.path.basename(seed_path)
+    match = re.search(r"seed_(\d{4}-\d{2}-\d{2}T\d{2})\.md$", base)
+    if not match:
+        return None
+    dt = datetime.strptime(match.group(1), "%Y-%m-%dT%H").replace(tzinfo=timezone.utc)
+    return int(dt.timestamp())
+
+
+def _format_chart_time(ts):
+    """Format Unix seconds as UTC hour timestamp (YYYY-MM-DD HH:MM)."""
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+
 # ============== Pipeline Steps ==============
 
 def check_server(base_url, session=None):
@@ -204,7 +222,11 @@ def step4_run_simulation(base_url, simulation_id, max_rounds=10, session=None):
     total_rounds = status.get("total_rounds", "?")
     total_actions = status.get("total_actions_count", 0)
     print(f"\r[Step 4/5] Running simulation...  ✓ {total_rounds} rounds, {total_actions} actions ({elapsed}s)")
-    return simulation_id
+    return {
+        "simulation_id": simulation_id,
+        "total_rounds": total_rounds,
+        "total_actions": total_actions,
+    }
 
 
 # ============== Interview & Decision Parsing ==============
@@ -233,6 +255,34 @@ def _parse_range(response_text):
 def _fmt_forecast(agent_name, range_low, range_high):
     """Format a price forecast as a display string."""
     return f"{agent_name}: {range_low} — {range_high}"
+
+
+def _average_forecasts(forecasts):
+    """Aggregate per-agent forecasts into one consensus average forecast."""
+    if not forecasts:
+        return []
+
+    lows = [float(item["range_low"]) for item in forecasts]
+    highs = [float(item["range_high"]) for item in forecasts]
+    avg_low = sum(lows) / len(lows)
+    avg_high = sum(highs) / len(highs)
+
+    if avg_low >= avg_high:
+        avg_high = avg_low + 1e-6
+
+    return [{
+        "name": "consensus_avg",
+        "range_low": avg_low,
+        "range_high": avg_high,
+    }]
+
+
+def _summary_prediction(forecasts):
+    """Return one predicted low/high pair from forecast list using simple average."""
+    if not forecasts:
+        return None
+    avg = _average_forecasts(forecasts)[0]
+    return avg["range_low"], avg["range_high"]
 
 
 def _forecast_from_persona(llm, agent_name, persona, world_seed, predict_hours):
@@ -395,21 +445,36 @@ def step5_interview_for_trades(base_url, simulation_id, llm, seed_text, predict_
 
 # ============== CSV Output ==============
 
-def write_csv(forecasts, output_path, start_timestamp, predict_hours):
-    """Write price forecast decisions to CSV."""
-    end_timestamp = start_timestamp + predict_hours * 3600
-    with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["name", "start_timestamp", "end_timestamp",
-                                               "range_low", "range_high"])
-        writer.writeheader()
-        for row in forecasts:
-            writer.writerow({
-                "name": row["name"],
-                "start_timestamp": start_timestamp,
-                "end_timestamp": end_timestamp,
-                "range_low": row["range_low"],
-                "range_high": row["range_high"],
-            })
+def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
+              actual_low, actual_high, agent_count, simulation_rounds):
+    """Write one summary row with prediction + metadata fields.
+
+    If the file already exists, append a new row; otherwise create with header.
+    """
+    fieldnames = [
+        "latest_chart_time",
+        "predicted_low",
+        "predicted_high",
+        "actual_low",
+        "actual_high",
+        "agent_count",
+        "simulation_rounds",
+    ]
+
+    file_exists = os.path.exists(output_path)
+    with open(output_path, "a", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({
+            "latest_chart_time": latest_chart_time,
+            "predicted_low": predicted_low,
+            "predicted_high": predicted_high,
+            "actual_low": actual_low,
+            "actual_high": actual_high,
+            "agent_count": agent_count,
+            "simulation_rounds": simulation_rounds,
+        })
 
 
 # ============== Main ==============
@@ -417,9 +482,9 @@ def write_csv(forecasts, output_path, start_timestamp, predict_hours):
 def main():
     parser = argparse.ArgumentParser(description="MiroFish Price Forecast Pipeline")
     parser.add_argument("seed_file", help="Path to seed file (md/txt)")
-    default_output = os.path.join(project_root, '..', 'rust-connectors', 'price_forecast.csv')
+    default_output = os.path.join(project_root, '..', 'rust-connectors', 'mm-simulation', 'data', 'actions.csv')
     parser.add_argument("-o", "--output", default=default_output,
-                        help="Output CSV path (default: ../rust-connectors/price_forecast.csv)")
+                        help="Output CSV path (default: ../rust-connectors/mm-simulation/data/actions.csv)")
     parser.add_argument("-r", "--requirement", default=None,
                         help="Simulation requirement (default: uses seed file content)")
     parser.add_argument("--base-url", default="http://localhost:5001",
@@ -428,6 +493,12 @@ def main():
                         help="Max simulation rounds (default: 15)")
     parser.add_argument("--predict-hours", type=int, default=12,
                         help="Forecast horizon in hours (default: 12)")
+    parser.add_argument("--aggregate", choices=["none", "average"], default="none",
+                        help="Aggregate agent forecasts into one result (default: none)")
+    parser.add_argument("--actual-low", type=float, default=None,
+                        help="Optional actual next-candle low for backtest logging")
+    parser.add_argument("--actual-high", type=float, default=None,
+                        help="Optional actual next-candle high for backtest logging")
     args = parser.parse_args()
 
     args.output = resolve_path(args.output)
@@ -461,16 +532,42 @@ def main():
     agent_count = count_agents_in_seed(seed_text)
     simulation_id = step3_prepare_simulation(args.base_url, project_id, graph_id,
                                              agent_count=agent_count, session=session)
-    step4_run_simulation(args.base_url, simulation_id, max_rounds=args.rounds, session=session)
+    sim_result = step4_run_simulation(args.base_url, simulation_id, max_rounds=args.rounds, session=session)
     forecasts = step5_interview_for_trades(args.base_url, simulation_id, llm, seed_text,
                                            args.predict_hours, session=session)
 
+    source_agent_count = len(forecasts)
+
+    if forecasts and args.aggregate == "average":
+        forecasts = _average_forecasts(forecasts)
+        avg = forecasts[0]
+        print(f"Consensus average: {avg['range_low']} — {avg['range_high']}")
+
     if forecasts:
-        start_ts = extract_latest_timestamp(seed_text)
-        write_csv(forecasts, args.output, start_ts, args.predict_hours)
+        summary = _summary_prediction(forecasts)
+        if not summary:
+            print("Warning: Could not compute summary prediction")
+            sys.exit(1)
+
+        predicted_low, predicted_high = summary
+        latest_ts = extract_timestamp_from_seed_path(args.seed_file)
+        if latest_ts is None:
+            latest_ts = extract_latest_timestamp(seed_text)
+        latest_chart_time = _format_chart_time(latest_ts)
+
+        write_csv(
+            output_path=args.output,
+            latest_chart_time=latest_chart_time,
+            predicted_low=predicted_low,
+            predicted_high=predicted_high,
+            actual_low=args.actual_low,
+            actual_high=args.actual_high,
+            agent_count=source_agent_count,
+            simulation_rounds=sim_result.get("total_rounds", args.rounds),
+        )
         print()
         print("=" * 50)
-        print(f"Output: {args.output} ({len(forecasts)} forecasts)")
+        print(f"Output: {args.output} (1 summary row)")
     else:
         print()
         print("=" * 50)
