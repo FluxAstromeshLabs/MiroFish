@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trade.sh — Backtest loop: run_trade (predict) → extract actual → log → repeat
+# trade.sh — Trade loop: run_trade (predict) → extract actual → log → repeat
 # Seeds must be pre-generated in seeds/ directory
 # Assumes Flask backend is already running in another terminal.
 set -uo pipefail
@@ -39,14 +39,14 @@ current_hour="$START_HOUR"
 
 echo ""
 echo "=========================================="
-echo "Trade Backtest Loop"
+echo "Trade Loop"
 echo "Start: $current_hour"
 echo "Seeds dir: $SEEDS_DIR"
 echo "Output CSV: $OUTPUT_CSV"
 echo "=========================================="
 echo ""
 
-# Backtest loop
+# Loop config: change {1..72} to desired number of iterations
 for i in {1..72}; do
     seed_file="$SEEDS_DIR/seed_${current_hour}.md"
 
@@ -78,7 +78,7 @@ for i in {1..72}; do
 
     next_seed="$SEEDS_DIR/seed_${next_hour}.md"
     if [[ ! -f "$next_seed" ]]; then
-        echo "  WARNING: Next seed not found: $next_seed (end of backtest)"
+        echo "  WARNING: Next seed not found: $next_seed (end of loop)"
         break
     fi
 
@@ -115,5 +115,5 @@ PYEOF
 done
 
 echo "=========================================="
-echo "Backtest complete. Results: $OUTPUT_CSV"
+echo "Trade loop complete. Results: $OUTPUT_CSV"
 echo "=========================================="
