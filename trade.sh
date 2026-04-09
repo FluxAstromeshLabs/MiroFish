@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# trade.sh — Backtest loop: gen_seed → run_trade (predict) → get actual → log → repeat
+# trade.sh — Backtest loop: run_trade (predict) → extract actual → log → repeat
+# Seeds must be pre-generated in seeds/ directory
 # Assumes Flask backend is already running in another terminal.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 VENV_PYTHON="$ROOT/backend/.venv/bin/python3"
-MARKETDATA_DIR="${2:-$ROOT/marketdata}"
+SEEDS_DIR="${2:-$ROOT/seeds}"
 OUTPUT_CSV="${3:-$ROOT/price_forecast.csv}"
 START_HOUR="${1:-2026-04-05T01}"
 
@@ -40,34 +41,25 @@ echo ""
 echo "=========================================="
 echo "Trade Backtest Loop"
 echo "Start: $current_hour"
-echo "Marketdata: $MARKETDATA_DIR"
+echo "Seeds dir: $SEEDS_DIR"
 echo "Output CSV: $OUTPUT_CSV"
 echo "=========================================="
 echo ""
 
 # Backtest loop
 for i in {1..72}; do
+    seed_file="$SEEDS_DIR/seed_${current_hour}.md"
+
+    # Check if seed exists
+    if [[ ! -f "$seed_file" ]]; then
+        echo "ERROR: Seed not found: $seed_file"
+        break
+    fi
+
     echo "--- Iteration $i: $current_hour ---"
 
-    # Step 1: Generate seed for current hour
-    seed_file="$ROOT/seeds/seed_${current_hour}.md"
-    echo "  [1/4] Generating seed..."
-    if ! "$VENV_PYTHON" "$ROOT/backend/scripts/gen_seed.py" \
-        --end-hour "$current_hour" \
-        --hours 72 \
-        --marketdata "$MARKETDATA_DIR" \
-        --output-dir "$ROOT/seeds" > /dev/null 2>&1; then
-        echo "  ERROR: gen_seed.py failed for $current_hour"
-        break
-    fi
-
-    if [[ ! -f "$seed_file" ]]; then
-        echo "  ERROR: seed file not created: $seed_file"
-        break
-    fi
-
-    # Step 2: Run MiroFish simulation + predict
-    echo "  [2/4] Running MiroFish simulation..."
+    # Step 1: Run MiroFish simulation + predict
+    echo "  [1/3] Running MiroFish simulation..."
     if ! "$VENV_PYTHON" "$ROOT/backend/scripts/run_trade.py" \
         --predict-hours 1 \
         --base-url "http://localhost:5001" \
@@ -77,29 +69,27 @@ for i in {1..72}; do
         echo "  WARNING: run_trade.py failed, continuing..."
     fi
 
-    # Step 3: Extract actual prices from NEXT hour's seed
+    # Step 2: Extract actual prices from NEXT hour's seed
     next_hour=$(date -d "$(echo $current_hour | sed 's/T/ /') + 1 hour" +"%Y-%m-%dT%H" 2>/dev/null)
     if [[ -z "$next_hour" ]]; then
         echo "  WARNING: Could not calculate next hour, stopping"
         break
     fi
 
-    next_seed="$ROOT/seeds/seed_${next_hour}.md"
-    echo "  [3/4] Getting actual next candle prices..."
-    "$VENV_PYTHON" "$ROOT/backend/scripts/gen_seed.py" \
-        --end-hour "$next_hour" \
-        --hours 72 \
-        --marketdata "$MARKETDATA_DIR" \
-        --output-dir "$ROOT/seeds" > /dev/null 2>&1
+    next_seed="$SEEDS_DIR/seed_${next_hour}.md"
+    if [[ ! -f "$next_seed" ]]; then
+        echo "  WARNING: Next seed not found: $next_seed (end of backtest)"
+        break
+    fi
 
-    if [[ -f "$next_seed" ]]; then
-        actual_low=$(extract_price "$next_seed" "low")
-        actual_high=$(extract_price "$next_seed" "high")
-        echo "  [4/4] Logging: low=$actual_low, high=$actual_high"
+    actual_low=$(extract_price "$next_seed" "low")
+    actual_high=$(extract_price "$next_seed" "high")
 
-        # Update CSV with actual prices (append new row with actuals)
-        if [[ -n "$actual_low" && -n "$actual_high" ]]; then
-            python3 << 'PYEOF'
+    if [[ -n "$actual_low" && -n "$actual_high" ]]; then
+        echo "  [2/3] Actual next candle: low=$actual_low, high=$actual_high"
+
+        # Step 3: Update CSV with actual prices
+        python3 << PYEOF
 import csv, os
 csv_file = "$OUTPUT_CSV"
 if os.path.exists(csv_file):
@@ -113,16 +103,16 @@ if os.path.exists(csv_file):
             w = csv.DictWriter(f, fieldnames=rows[0].keys())
             w.writeheader()
             w.writerows(rows)
+        print("  [3/3] Logged to CSV")
 PYEOF
-        fi
     else
-        echo "  WARNING: Next seed not found: $next_seed"
+        echo "  [2/3] WARNING: Could not extract prices from $next_seed"
     fi
 
-    # Step 5: Move to next hour
+    # Move to next hour
     current_hour="$next_hour"
-    echo "  Done. Moving to $current_hour"
     echo ""
+done
 
 echo "=========================================="
 echo "Backtest complete. Results: $OUTPUT_CSV"
