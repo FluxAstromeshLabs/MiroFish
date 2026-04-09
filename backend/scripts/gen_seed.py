@@ -7,6 +7,8 @@ then writes a structured Markdown seed file.
 import os
 import argparse
 from datetime import datetime, timezone, timedelta
+import csv
+import json
 
 import requests
 
@@ -15,18 +17,58 @@ from common import project_root, resolve_path
 
 # ── Time helpers ───────────────────────────────────────────────────────────
 
-def day_bounds_ms(date_str):
-    """Return (start_ms, end_ms) for a YYYY-MM-DD day in UTC (inclusive ms)."""
-    dt = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    start = int(dt.timestamp() * 1000)
-    end = int((dt + timedelta(days=1)).timestamp() * 1000) - 1
+def hour_bounds_ms(dt: datetime):
+    """Return (start_ms, end_ms) for a UTC hour (inclusive ms)."""
+    floored = dt.replace(minute=0, second=0, microsecond=0)
+    start = int(floored.timestamp() * 1000)
+    end = int((floored + timedelta(hours=1)).timestamp() * 1000) - 1
     return start, end
 
 
-def offset_day(date_str, delta):
-    """Return YYYY-MM-DD string shifted by delta days (negative = earlier)."""
-    dt = datetime.strptime(date_str, "%Y-%m-%d")
-    return (dt + timedelta(days=delta)).strftime("%Y-%m-%d")
+def parse_hour(hour_str: str) -> datetime:
+    """Parse YYYY-MM-DDTHH or YYYY-MM-DD HH into a UTC datetime."""
+    for fmt in ("%Y-%m-%dT%H", "%Y-%m-%d %H"):
+        try:
+            return datetime.strptime(hour_str, fmt).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    raise ValueError(f"Cannot parse hour: {hour_str!r}  (expected YYYY-MM-DDTHH)")
+
+
+def read_ohlcv_csv(path: str) -> list[dict]:
+    """Read ohlcv.csv → list of {T, O, H, L, C, V} dicts. Returns [] if file missing."""
+    if not os.path.exists(path):
+        return []
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f)
+        rows = []
+        for row in reader:
+            rows.append({
+                "T": int(row["T"]),
+                "O": float(row["O"]),
+                "H": float(row["H"]),
+                "L": float(row["L"]),
+                "C": float(row["C"]),
+                "V": float(row["V"]),
+            })
+    return rows
+
+
+def read_liq_csv(path: str) -> list[dict]:
+    """Read liq.csv → list of {S, q, p, T} dicts. Returns [] if file missing."""
+    if not os.path.exists(path):
+        return []
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f)
+        rows = []
+        for row in reader:
+            rows.append({
+                "S": row["S"],
+                "q": float(row["q"]),
+                "p": float(row["p"]),
+                "T": int(row["T"]),
+            })
+    return rows
 
 
 # ── Formatters ─────────────────────────────────────────────────────────────
@@ -122,15 +164,14 @@ def format_news(items):
 
 # ── API fetchers ───────────────────────────────────────────────────────────
 
-def fetch_ohlcv(base_url, bucket, day):
+def fetch_ohlcv(base_url, bucket, start_ms, end_ms):
     """
-    GET /api/v1/history/ohlcv?bucket=<bucket>&day=<day>&start=<ms>&end=<ms>
+    GET /api/v1/history/ohlcv?bucket=<bucket>&start=<ms>&end=<ms>
     Returns list of item dicts with open_time_ms, open, high, low, close, volume.
     """
-    start, end = day_bounds_ms(day)
     resp = requests.get(
         f"{base_url}/api/v1/history/ohlcv",
-        params={"bucket": bucket, "day": day, "start": start, "end": end},
+        params={"bucket": bucket, "start": start_ms, "end": end_ms},
         timeout=15,
     )
     resp.raise_for_status()
@@ -204,13 +245,16 @@ def load_agents(agents_path=None):
 # ── Main ───────────────────────────────────────────────────────────────────
 
 def main():
+    _now = datetime.now(tz=timezone.utc)
+    _default_hour = _now.strftime("%Y-%m-%dT%H")
+
     parser = argparse.ArgumentParser(description="gen_seed — Flux API → seed.md (BTC Futures)")
     parser.add_argument("--base-url", default="http://localhost:8080",
                         help="Flux exchange base URL (default: http://localhost:8080)")
-    parser.add_argument("--day", default=datetime.now(tz=timezone.utc).strftime("%Y-%m-%d"),
-                        help="Ending day YYYY-MM-DD (default: today UTC)")
-    parser.add_argument("--days", type=int, default=3,
-                        help="Days of history to include (default: 3)")
+    parser.add_argument("--hour", default=_default_hour,
+                        help="Ending hour YYYY-MM-DDTHH in UTC (default: current hour)")
+    parser.add_argument("--hours", type=int, default=72,
+                        help="Hours of history to include (default: 72)")
     parser.add_argument("--agents", default=None, help="Optional agents file path")
     parser.add_argument("-o", "--output", default="seed.md",
                         help="Output path (default: seed.md at project root)")
@@ -218,48 +262,40 @@ def main():
 
     args.output = resolve_path(args.output)
     base = args.base_url
-    day = args.day
-    n = args.days
+    end_dt = parse_hour(args.hour)
+    n = args.hours
+
+    _, end_ms = hour_bounds_ms(end_dt)
+    start_dt = end_dt - timedelta(hours=n - 1)
+    start_ms, _ = hour_bounds_ms(start_dt)
 
     print("gen_seed — Flux API → seed.md (BTC Futures)")
     print(f"  Base URL : {base}")
-    print(f"  Day      : {day}  ({n} days)")
+    print(f"  Hour     : {args.hour}  ({n} hours)")
     print(f"  Output   : {args.output}")
     print()
 
-    # Build day list oldest → newest
-    days = [offset_day(day, -(n - 1 - i)) for i in range(n)]
-    _, end_ms = day_bounds_ms(day)
+    # Fetch OHLCV for the full window in one call per bucket
+    print(f"  OHLCV 1D ...", end=" ", flush=True)
+    items_1d = fetch_ohlcv(base, "1d", start_ms, end_ms)
+    print(len(items_1d))
 
-    # Fetch OHLCV
-    items_1d, items_4h, items_1h = [], [], []
-    for d in days:
-        print(f"  OHLCV 1D  {d} ...", end=" ", flush=True)
-        chunk = fetch_ohlcv(base, "1d", d)
-        items_1d += chunk
-        print(len(chunk))
+    print(f"  OHLCV 4H ...", end=" ", flush=True)
+    items_4h = fetch_ohlcv(base, "4h", start_ms, end_ms)
+    print(len(items_4h))
 
-        print(f"  OHLCV 4H  {d} ...", end=" ", flush=True)
-        chunk = fetch_ohlcv(base, "4h", d)
-        items_4h += chunk
-        print(len(chunk))
+    print(f"  OHLCV 1H ...", end=" ", flush=True)
+    items_1h = fetch_ohlcv(base, "1h", start_ms, end_ms)
+    print(len(items_1h))
 
-        print(f"  OHLCV 1H  {d} ...", end=" ", flush=True)
-        chunk = fetch_ohlcv(base, "1h", d)
-        items_1h += chunk
-        print(len(chunk))
-
-    # Fetch liquidations (4 fixed windows relative to end of --day)
+    # Fetch liquidations (4 fixed windows relative to end hour)
     liq_windows = {"1h": 3_600_000, "4h": 14_400_000, "12h": 43_200_000, "24h": 86_400_000}
     liq_data = {}
     for label, offset_ms in liq_windows.items():
-        print(f"  Liq ({label:>3}) ...", end=" ", flush=True)
         liq_data[label] = fetch_liquidations(base, end_ms - offset_ms, end_ms)
-        print(liq_data[label].get("count", 0), "events")
 
-    # Fetch news over the full N-day window
-    start_ms, _ = day_bounds_ms(days[0])
-    print(f"  News {days[0]} → {day} ...", end=" ", flush=True)
+    # Fetch news over the full N-hour window
+    print(f"  News {start_dt.strftime('%Y-%m-%dT%H')} → {args.hour} ...", end=" ", flush=True)
     news_items = fetch_news(base, start_ms, end_ms)
     print(len(news_items), "items")
 
