@@ -194,7 +194,7 @@ def step3_prepare_simulation(base_url, project_id, graph_id, agent_count=20, ses
     return simulation_id
 
 
-def step4_run_simulation(base_url, simulation_id, max_rounds=10, session=None):
+def step4_run_simulation(base_url, simulation_id, max_rounds=5, session=None):
     """Start OASIS simulation and wait for completion."""
     print("[Step 4/5] Running simulation...", end="", flush=True)
     t0 = time.time()
@@ -446,7 +446,7 @@ def step5_interview_for_trades(base_url, simulation_id, llm, seed_text, predict_
 # ============== CSV Output ==============
 
 def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
-              actual_low, actual_high, agent_count, simulation_rounds):
+              actual_low, actual_high, agent_count, simulation_rounds, runtime):
     """Write one summary row with prediction + metadata fields.
 
     If the file already exists, append a new row; otherwise create with header.
@@ -459,6 +459,7 @@ def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
         "actual_high",
         "agent_count",
         "simulation_rounds",
+        "runtime",
     ]
 
     file_exists = os.path.exists(output_path)
@@ -474,12 +475,15 @@ def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
             "actual_high": actual_high,
             "agent_count": agent_count,
             "simulation_rounds": simulation_rounds,
+            "runtime": runtime,
         })
 
 
 # ============== Main ==============
 
 def main():
+    pipeline_start = time.time()
+
     parser = argparse.ArgumentParser(description="MiroFish Price Forecast Pipeline")
     parser.add_argument("seed_file", help="Path to seed file (md/txt)")
     default_output = os.path.join(project_root, '..', 'rust-connectors', 'mm-simulation', 'data', 'actions.csv')
@@ -489,8 +493,8 @@ def main():
                         help="Simulation requirement (default: uses seed file content)")
     parser.add_argument("--base-url", default="http://localhost:5001",
                         help="Flask server URL (default: http://localhost:5001)")
-    parser.add_argument("--rounds", type=int, default=15,
-                        help="Max simulation rounds (default: 15)")
+    parser.add_argument("--rounds", type=int, default=5,
+                        help="Max simulation rounds (default: 5)")
     parser.add_argument("--predict-hours", type=int, default=12,
                         help="Forecast horizon in hours (default: 12)")
     parser.add_argument("--aggregate", choices=["none", "average"], default="none",
@@ -555,6 +559,7 @@ def main():
             latest_ts = extract_latest_timestamp(seed_text)
         latest_chart_time = _format_chart_time(latest_ts)
 
+        pipeline_elapsed = (time.time() - pipeline_start) / 60.0
         write_csv(
             output_path=args.output,
             latest_chart_time=latest_chart_time,
@@ -564,6 +569,7 @@ def main():
             actual_high=args.actual_high,
             agent_count=source_agent_count,
             simulation_rounds=sim_result.get("total_rounds", args.rounds),
+            runtime=pipeline_elapsed,
         )
         print()
         print("=" * 50)
