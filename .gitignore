@@ -1,3 +1,8 @@
+logs/
+marketdata/
+seeds/
+news/
+###############
 # OS
 .DS_Store
 Thumbs.db
@@ -58,5 +63,3 @@ backend/uploads/
 
 # Docker 数据
 data/
-
-marketdata/

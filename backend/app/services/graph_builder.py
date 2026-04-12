@@ -10,13 +10,19 @@ import threading
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass
 
+from zep_cloud import InternalServerError
 from zep_cloud.client import Zep
 from zep_cloud import EpisodeData, EntityEdgeSourceTarget
 
 from ..config import Config
 from ..models.task import TaskManager, TaskStatus
+from ..utils.logger import get_logger
+from ..utils.retry import RetryableAPIClient
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 from .text_processor import TextProcessor
+
+
+logger = get_logger('mirofish.graph_builder')
 
 
 @dataclass
@@ -49,6 +55,59 @@ class GraphBuilderService:
         
         self.client = Zep(api_key=self.api_key)
         self.task_manager = TaskManager()
+        self.retry_client = RetryableAPIClient(
+            max_retries=int(os.environ.get("ZEP_RETRY_MAX_RETRIES", "3")),
+            initial_delay=float(os.environ.get("ZEP_RETRY_INITIAL_DELAY", "1.5")),
+            max_delay=float(os.environ.get("ZEP_RETRY_MAX_DELAY", "12")),
+            backoff_factor=2.0,
+        )
+        self.retryable_exceptions = self._get_retryable_exceptions()
+
+    @staticmethod
+    def _get_retryable_exceptions():
+        """Collect transient network exception types for Zep API calls."""
+        exceptions = [ConnectionError, TimeoutError, OSError, InternalServerError]
+
+        try:
+            import httpx
+            exceptions.extend([
+                httpx.TimeoutException,
+                httpx.NetworkError,
+                httpx.ReadTimeout,
+                httpx.ConnectError,
+            ])
+        except Exception:
+            pass
+
+        try:
+            import requests
+            exceptions.extend([
+                requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError,
+            ])
+        except Exception:
+            pass
+
+        try:
+            from urllib3.exceptions import ProtocolError
+            exceptions.append(ProtocolError)
+        except Exception:
+            pass
+
+        return tuple(dict.fromkeys(exceptions))
+
+    def _call_zep_with_retry(self, func: Callable, *args, operation: str, **kwargs):
+        """Execute a Zep API call with retry on transient transport failures."""
+        try:
+            return self.retry_client.call_with_retry(
+                func,
+                *args,
+                exceptions=self.retryable_exceptions,
+                **kwargs,
+            )
+        except self.retryable_exceptions as e:
+            logger.error(f"Zep operation failed after retries: {operation}: {str(e)}")
+            raise
     
     def build_graph_async(
         self,
@@ -188,10 +247,12 @@ class GraphBuilderService:
         """Create a Zep graph (public method)"""
         graph_id = f"mirofish_{uuid.uuid4().hex[:16]}"
         
-        self.client.graph.create(
+        self._call_zep_with_retry(
+            self.client.graph.create,
             graph_id=graph_id,
             name=name,
-            description="MiroFish Social Simulation Graph"
+            description="MiroFish Social Simulation Graph",
+            operation=f"create_graph(graph_id={graph_id})",
         )
         
         return graph_id
@@ -279,10 +340,12 @@ class GraphBuilderService:
         
         # Call Zep API to set ontology
         if entity_types or edge_definitions:
-            self.client.graph.set_ontology(
+            self._call_zep_with_retry(
+                self.client.graph.set_ontology,
                 graph_ids=[graph_id],
                 entities=entity_types if entity_types else None,
                 edges=edge_definitions if edge_definitions else None,
+                operation=f"set_ontology(graph_id={graph_id})",
             )
     
     def add_text_batches(
@@ -316,9 +379,11 @@ class GraphBuilderService:
             
             # Send to Zep
             try:
-                batch_result = self.client.graph.add_batch(
+                batch_result = self._call_zep_with_retry(
+                    self.client.graph.add_batch,
                     graph_id=graph_id,
-                    episodes=episodes
+                    episodes=episodes,
+                    operation=f"add_batch(graph_id={graph_id}, batch={batch_num}/{total_batches})",
                 )
                 
                 # Collect returned episode UUIDs
@@ -370,7 +435,11 @@ class GraphBuilderService:
             # Check processing status for each episode
             for ep_uuid in list(pending_episodes):
                 try:
-                    episode = self.client.graph.episode.get(uuid_=ep_uuid)
+                    episode = self._call_zep_with_retry(
+                        self.client.graph.episode.get,
+                        uuid_=ep_uuid,
+                        operation=f"episode_get(uuid={ep_uuid})",
+                    )
                     is_processed = getattr(episode, 'processed', False)
                     
                     if is_processed:

@@ -1,5 +1,5 @@
 """
-gen_seed — Flux Exchange API → seed.md (BTC Futures)
+gen_seed — Flux Exchange API → seed_YYYY-MM-DDTHH.md (BTC Futures)
 Fetches OHLCV, liquidations, and news from the Flux exchange HTTP API,
 then writes a structured Markdown seed file.
 """
@@ -222,7 +222,7 @@ def main():
     _now = datetime.now(tz=timezone.utc)
     _default_hour = _now.strftime("%Y-%m-%dT%H")
 
-    parser = argparse.ArgumentParser(description="gen_seed — marketdata CSV → seed.md (BTC Futures)")
+    parser = argparse.ArgumentParser(description="gen_seed — marketdata CSV → seed_YYYY-MM-DDTHH.md (BTC Futures)")
     parser.add_argument("--end-hour", default=_default_hour,
                         help="End hour of the last seed YYYY-MM-DDTHH in UTC (default: current hour)")
     parser.add_argument("--hours", type=int, default=72,
@@ -255,7 +255,7 @@ def main():
         for i in range(args.count)
     ]
 
-    print(f"gen_seed — marketdata CSV → seed.md")
+    print(f"gen_seed — marketdata CSV → seed_YYYY-MM-DDTHH.md")
     print(f"  Marketdata : {marketdata_dir}")
     print(f"  Output dir : {output_dir}")
     print(f"  Seeds      : {args.count}  (step={args.step}h, window={args.hours}h each)")
@@ -263,7 +263,7 @@ def main():
 
     for seed_end in seed_end_times:
         label = seed_end.strftime("%Y-%m-%dT%H")
-        filename = "seed.md" if args.count == 1 else f"seed_{label}.md"
+        filename = f"seed_{label}.md"
         out_path = os.path.join(output_dir, filename)
 
         print(f"  Generating {label} ...", end=" ", flush=True)
