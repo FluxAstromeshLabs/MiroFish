@@ -13,6 +13,7 @@ import hashlib
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from typing import Optional, Tuple
 
 import requests
 
@@ -21,7 +22,7 @@ from common import project_root, resolve_path, LLMClient
 
 # ============== Helpers ==============
 
-def _load_graph_cache(sidecar_path: str, sha256: str):
+def _load_graph_cache(sidecar_path: str, sha256: str) -> Optional[Tuple[str, str, str]]:
     """Return (project_id, graph_id, simulation_id) from sidecar if sha256 key exists, else None.
 
     Returns None if the entry is incomplete (missing any required field).
@@ -40,7 +41,7 @@ def _load_graph_cache(sidecar_path: str, sha256: str):
             # Only return if all three fields present
             if project_id and graph_id and simulation_id:
                 return project_id, graph_id, simulation_id
-    except (json.JSONDecodeError, KeyError):
+    except json.JSONDecodeError:
         pass
     return None
 
