@@ -118,10 +118,13 @@ def main():
             row["loss"] = "" if (hit is None or loss is None) else loss
             writer.writerow(row)
 
-        # Append summary lines
+        # Append summary lines (only those with correct metadata format)
         f.write("\n")
         for line in summary_lines:
-            f.write(line)
+            cols = line.strip().split(",")
+            # Only keep lines with exactly 2 columns (e.g., "key,value")
+            if len(cols) == 2:
+                f.write(line)
         if avg_loss is not None:
             f.write(f"avg_loss,{avg_loss:.4f}\n")
         else:
