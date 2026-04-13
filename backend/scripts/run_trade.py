@@ -568,9 +568,23 @@ def main():
 
     llm = LLMClient()
 
-    # Run pipeline
-    project_id = step1_generate_ontology(args.base_url, args.seed_file, requirement, session=session)
-    graph_id = step2_build_graph(args.base_url, project_id, session=session)
+    # Graph-id cache — skip steps 1 & 2 if seed content unchanged
+    seed_sha256 = hashlib.sha256(seed_text.encode("utf-8")).hexdigest()
+    seed_dir = os.path.dirname(os.path.abspath(args.seed_file))
+    seed_basename = os.path.basename(args.seed_file)
+    cache_dir = os.path.join(seed_dir, ".cache")
+    sidecar_path = os.path.join(cache_dir, seed_basename + ".json")
+
+    cached = _load_graph_cache(sidecar_path, seed_sha256)
+    if cached:
+        project_id, graph_id = cached
+        print(f"[Cache] Hit — skipping steps 1 & 2 (sha256: {seed_sha256[:12]}...)")
+    else:
+        project_id = step1_generate_ontology(args.base_url, args.seed_file, requirement, session=session)
+        graph_id = step2_build_graph(args.base_url, project_id, session=session)
+        os.makedirs(cache_dir, exist_ok=True)
+        _save_graph_cache(sidecar_path, seed_sha256, project_id, graph_id)
+        print(f"[Cache] Saved (sha256: {seed_sha256[:12]}...)")
     agent_count = count_agents_in_seed(seed_text)
     simulation_id = step3_prepare_simulation(args.base_url, project_id, graph_id,
                                              agent_count=agent_count, session=session)

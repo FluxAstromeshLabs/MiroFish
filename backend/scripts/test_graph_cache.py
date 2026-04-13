@@ -63,7 +63,7 @@ def test_save_preserves_existing_entries(tmp_path):
 def test_save_overwrites_same_hash(tmp_path):
     sidecar = tmp_path / "seed.md.json"
     existing = {"abc123": {"project_id": "p_old", "graph_id": "g_old", "cached_at": "2026-01-01"}}
-    sidecar.write_text(json.dumps(existing))
+    sidecar.write_text(json.dumps(existing))    
     _save_graph_cache(str(sidecar), "abc123", "p_new", "g_new")
     data = json.loads(sidecar.read_text())
     assert data["abc123"]["project_id"] == "p_new"
@@ -74,3 +74,17 @@ def test_load_returns_none_on_corrupt_json(tmp_path):
     sidecar.write_text("not valid json {{{")
     result = _load_graph_cache(str(sidecar), "abc123")
     assert result is None
+
+
+def test_sidecar_path_derivation(tmp_path):
+    """Verify the sidecar path formula used in main()."""
+    seed_file = tmp_path / "seeds" / "seed_2026-04-05T01.md"
+    seed_file.parent.mkdir(parents=True)
+    seed_file.write_text("content")
+
+    seed_dir = os.path.dirname(os.path.abspath(str(seed_file)))
+    seed_basename = os.path.basename(str(seed_file))
+    cache_dir = os.path.join(seed_dir, ".cache")
+    sidecar_path = os.path.join(cache_dir, seed_basename + ".json")
+
+    assert sidecar_path == str(tmp_path / "seeds" / ".cache" / "seed_2026-04-05T01.md.json")
