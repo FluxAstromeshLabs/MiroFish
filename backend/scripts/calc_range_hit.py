@@ -66,14 +66,12 @@ def main():
     # Separate data rows (have same column count as header) from summary lines
     data_lines = []
     summary_lines = []
-    seen_blank = False
     for line in raw_lines[1:]:
         stripped = line.strip()
         if not stripped:
-            seen_blank = True
             continue
         cols = stripped.split(",")
-        if not seen_blank and len(cols) == len(fieldnames):
+        if len(cols) == len(fieldnames):
             data_lines.append(line)
         else:
             summary_lines.append(line)
