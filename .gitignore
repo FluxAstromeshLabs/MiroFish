@@ -63,3 +63,6 @@ backend/uploads/
 
 # Docker 数据
 data/
+
+# Seed graph-id cache
+**/.cache/
