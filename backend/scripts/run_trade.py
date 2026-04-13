@@ -11,6 +11,7 @@ import time
 import re
 import hashlib
 import argparse
+import fcntl
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Optional, Tuple
@@ -499,6 +500,7 @@ def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
     """Write one summary row with prediction + metadata fields.
 
     If the file already exists, append a new row; otherwise create with header.
+    Uses file locking to prevent race conditions when multiple processes write simultaneously.
     """
     fieldnames = [
         "latest_chart_time",
@@ -513,19 +515,23 @@ def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
 
     file_exists = os.path.exists(output_path)
     with open(output_path, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow({
-            "latest_chart_time": latest_chart_time,
-            "predicted_low": predicted_low,
-            "predicted_high": predicted_high,
-            "actual_low": actual_low,
-            "actual_high": actual_high,
-            "agent_count": agent_count,
-            "simulation_rounds": simulation_rounds,
-            "runtime": runtime,
-        })
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)  # Exclusive lock: wait until lock is available
+        try:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow({
+                "latest_chart_time": latest_chart_time,
+                "predicted_low": predicted_low,
+                "predicted_high": predicted_high,
+                "actual_low": actual_low,
+                "actual_high": actual_high,
+                "agent_count": agent_count,
+                "simulation_rounds": simulation_rounds,
+                "runtime": runtime,
+            })
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)  # Release lock
 
 
 # ============== Main ==============
