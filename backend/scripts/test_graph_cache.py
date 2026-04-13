@@ -34,14 +34,20 @@ def test_load_returns_entry_on_hit(tmp_path):
 
 
 def test_save_creates_new_sidecar(tmp_path):
-    sidecar = tmp_path / ".cache" / "seed.md.json"
-    os.makedirs(sidecar.parent, exist_ok=True)
+    sidecar = tmp_path / "seed.md.json"
     _save_graph_cache(str(sidecar), "abc123", "proj_abc", "graph_xyz")
     data = json.loads(sidecar.read_text())
     assert "abc123" in data
     assert data["abc123"]["project_id"] == "proj_abc"
     assert data["abc123"]["graph_id"] == "graph_xyz"
     assert "cached_at" in data["abc123"]
+
+
+def test_save_silently_skips_when_dir_missing(tmp_path):
+    sidecar = tmp_path / "nonexistent_dir" / "seed.md.json"
+    # Should not raise even though the directory doesn't exist
+    _save_graph_cache(str(sidecar), "abc123", "proj_abc", "graph_xyz")
+    assert not sidecar.exists()
 
 
 def test_save_preserves_existing_entries(tmp_path):
@@ -61,3 +67,10 @@ def test_save_overwrites_same_hash(tmp_path):
     _save_graph_cache(str(sidecar), "abc123", "p_new", "g_new")
     data = json.loads(sidecar.read_text())
     assert data["abc123"]["project_id"] == "p_new"
+
+
+def test_load_returns_none_on_corrupt_json(tmp_path):
+    sidecar = tmp_path / "seed.md.json"
+    sidecar.write_text("not valid json {{{")
+    result = _load_graph_cache(str(sidecar), "abc123")
+    assert result is None

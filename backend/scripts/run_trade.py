@@ -50,8 +50,11 @@ def _save_graph_cache(sidecar_path: str, sha256: str, project_id: str, graph_id:
         "graph_id": graph_id,
         "cached_at": datetime.now().isoformat(timespec="seconds"),
     }
-    with open(sidecar_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    try:
+        with open(sidecar_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except OSError:
+        pass  # cache write failure is non-fatal
 
 
 def poll(check_fn, interval=3, max_wait=600):
