@@ -110,7 +110,7 @@ def main():
         else:
             out_fields.append("loss")
 
-    # Write updated CSV
+    # Write updated CSV with loss column and cleaned summary lines
     with open(args.csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=out_fields, extrasaction="ignore")
         writer.writeheader()
@@ -118,17 +118,12 @@ def main():
             row["loss"] = "" if (hit is None or loss is None) else loss
             writer.writerow(row)
 
-        # Append summary lines (only those with correct metadata format)
+        # Append only valid summary lines (those with exactly 2 columns: key,value)
         f.write("\n")
         for line in summary_lines:
             cols = line.strip().split(",")
-            # Only keep lines with exactly 2 columns (e.g., "key,value")
             if len(cols) == 2:
                 f.write(line)
-        if avg_loss is not None:
-            f.write(f"avg_loss,{avg_loss:.4f}\n")
-        else:
-            f.write("avg_loss,\n")
 
     print(f"evaluated_rows={evaluated}")
     print(f"range_hits={hits}")

@@ -11,6 +11,7 @@ START_HOUR="${1:-}"
 NUM_SEEDS="${2:-3}"
 SEEDS_DIR="${3:-$ROOT/seeds}"
 SIM_ROUNDS=5
+MAX_PARALLEL=4
 
 trap 'echo ""; echo "Interrupted."; exit 0' INT TERM
 
@@ -38,7 +39,7 @@ LOG_FILE="$ROOT/logs/$TIMESTAMP.log"
 # Tee all output to log file
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-echo "Trade loop | start=$START_HOUR | num_seeds=$NUM_SEEDS | seeds=$SEEDS_DIR | output=$OUTPUT_CSV"
+echo "Trade loop | start=$START_HOUR | num_seeds=$NUM_SEEDS | rounds=$SIM_ROUNDS | seeds=$SEEDS_DIR | output=$OUTPUT_CSV"
 echo ""
 
 # Collect all seed files starting from START_HOUR
@@ -75,22 +76,58 @@ script_start=$(date +%s.%N)
 all_failed=false
 job_index=1
 
-# Process seeds in batches of NUM_SEEDS
-for ((i = 0; i < ${#seed_files[@]}; i += NUM_SEEDS)); do
-    batch_pids=()
-    batch_times=()
-    batch_failed=false
+# Sliding window: arrays indexed by slot (0..MAX_PARALLEL-1)
+active_pids=()    # pid or "" if slot is free
+active_times=()   # "job_start:hour:job_num" per slot
+active_hours=()   # hour per slot (for display)
 
-    # Launch up to NUM_SEEDS jobs
-    for ((j = 0; j < NUM_SEEDS && i + j < ${#seed_files[@]}; j++)); do
-        seed_file="${seed_files[$((i + j))]}"
-        job_num=$((job_index + j))
-        hour=$(basename "$seed_file" .md | sed 's/seed_//')
+# Reap a finished job from the active pool; updates active_pids/active_times.
+# Sets _reaped_slot to the freed slot index.
+reap_one() {
+    while true; do
+        for slot in "${!active_pids[@]}"; do
+            pid="${active_pids[$slot]}"
+            [[ -z "$pid" ]] && continue
+            if ! kill -0 "$pid" 2>/dev/null; then
+                time_info="${active_times[$slot]}"
+                local job_start hour job_num
+                job_start=$(echo "$time_info" | cut -d: -f1)
+                hour=$(echo "$time_info" | cut -d: -f2)
+                job_num=$(echo "$time_info" | cut -d: -f3)
+                local job_end runtime_mins
+                job_end=$(date +%s.%N)
+                runtime_mins=$(awk "BEGIN {printf \"%.1f\", ($job_end - $job_start) / 60}")
+                if wait "$pid"; then
+                    echo ""
+                    echo "[$job_num] $hour — ✓ ($runtime_mins mins)"
+                else
+                    all_failed=true
+                    echo ""
+                    echo "[$job_num] $hour — ✗ (failed)"
+                fi
+                active_pids[$slot]=""
+                active_times[$slot]=""
+                _reaped_slot=$slot
+                return
+            fi
+        done
+        sleep 0.5
+    done
+}
 
-        # Look up actual low/high from the next candle (seed_hour + 1h, all UTC)
-        actual_args=()
-        read actual_low actual_high < <(
-            "$VENV_PYTHON" - "$hour" "$ROOT/marketdata" <<'PYEOF'
+# Launch a seed job into a given slot
+launch_seed() {
+    local slot="$1"
+    local seed_file="$2"
+    local job_num="$3"
+    local hour
+    hour=$(basename "$seed_file" .md | sed 's/seed_//')
+
+    # Look up actual low/high from the next candle (seed_hour + 1h, all UTC)
+    local actual_args=()
+    local actual_low actual_high
+    read actual_low actual_high < <(
+        "$VENV_PYTHON" - "$hour" "$ROOT/marketdata" <<'PYEOF'
 import sys, os, csv, datetime, calendar
 
 hour_str = sys.argv[1]   # e.g. 2026-04-05T01
@@ -114,57 +151,60 @@ if os.path.exists(ohlcv_file):
                 hi = h if hi is None else max(hi, h)
 print(lo if lo is not None else "", hi if hi is not None else "")
 PYEOF
-        )
-        [[ -n "$actual_low" ]] && actual_args+=(--actual-low "$actual_low")
-        [[ -n "$actual_high" ]] && actual_args+=(--actual-high "$actual_high")
+    )
+    [[ -n "$actual_low" ]] && actual_args+=(--actual-low "$actual_low")
+    [[ -n "$actual_high" ]] && actual_args+=(--actual-high "$actual_high")
 
-        echo -n "[$job_num] $hour — running prediction..."
+    echo -n "[$job_num] $hour — running prediction..."
 
-        # Run in background, capture start time
-        job_start=$(date +%s.%N)
-        "$VENV_PYTHON" "$ROOT/backend/scripts/run_trade.py" \
-            -o "$OUTPUT_CSV" \
-            --rounds "$SIM_ROUNDS" \
-            "${actual_args[@]}" \
-            "$seed_file" &
+    local job_start
+    job_start=$(date +%s.%N)
+    "$VENV_PYTHON" "$ROOT/backend/scripts/run_trade.py" \
+        -o "$OUTPUT_CSV" \
+        --rounds "$SIM_ROUNDS" \
+        "${actual_args[@]}" \
+        "$seed_file" &
 
-        batch_pids+=($!)
-        batch_times+=("$job_start:$hour:$job_num")
-    done
+    active_pids[$slot]=$!
+    active_times[$slot]="$job_start:$hour:$job_num"
+}
 
-    # Wait for all jobs in this batch and collect runtimes
-    batch_runtimes=()
-    for ((j = 0; j < ${#batch_pids[@]}; j++)); do
-        pid=${batch_pids[$j]}
-        time_info="${batch_times[$j]}"
-        job_start=$(echo "$time_info" | cut -d: -f1)
-        hour=$(echo "$time_info" | cut -d: -f2)
-        job_num=$(echo "$time_info" | cut -d: -f3)
+# Initialize slots as empty
+for ((s = 0; s < MAX_PARALLEL; s++)); do
+    active_pids[$s]=""
+    active_times[$s]=""
+done
 
-        if wait $pid; then
-            job_end=$(date +%s.%N)
-            runtime_mins=$(awk "BEGIN {printf \"%.1f\", ($job_end - $job_start) / 60}")
-            batch_runtimes+=("$runtime_mins")
-            echo ""
-            echo "[$job_num] $hour — ✓ ($runtime_mins mins)"
-        else
-            batch_failed=true
-            all_failed=true
-            echo ""
-            echo "[$job_num] $hour — ✗ (failed)"
+# Process all seeds with sliding window
+for ((i = 0; i < ${#seed_files[@]}; i++)); do
+    seed_file="${seed_files[$i]}"
+    job_num=$job_index
+    job_index=$((job_index + 1))
+
+    # Find a free slot; if none, reap one first
+    free_slot=-1
+    for slot in "${!active_pids[@]}"; do
+        if [[ -z "${active_pids[$slot]}" ]]; then
+            free_slot=$slot
+            break
         fi
     done
 
-    # Calculate and report batch max runtime
-    if [[ ${#batch_runtimes[@]} -gt 0 ]]; then
-        batch_max=$(printf '%s\n' "${batch_runtimes[@]}" | sort -n | tail -1)
-        echo ""
-        echo "Batch runtime: $batch_max mins (max of parallel jobs)"
-        echo ""
+    if [[ $free_slot -eq -1 ]]; then
+        reap_one
+        free_slot=$_reaped_slot
     fi
 
-    job_index=$((job_index + NUM_SEEDS))
+    launch_seed "$free_slot" "$seed_file" "$job_num"
 done
+
+# Drain remaining active jobs
+for slot in "${!active_pids[@]}"; do
+    [[ -n "${active_pids[$slot]}" ]] && reap_one
+done
+
+# Brief delay to ensure all file writes complete
+sleep 0.5
 
 # Calculate total script runtime
 script_end=$(date +%s.%N)
@@ -175,11 +215,13 @@ score_output=$("$VENV_PYTHON" "$ROOT/backend/scripts/calc_range_hit.py" "$OUTPUT
 echo "$score_output"
 
 hit_rate=$(echo "$score_output" | grep '^hit_rate=' | cut -d= -f2)
+avg_loss=$(echo "$score_output" | grep '^avg_loss=' | cut -d= -f2)
 
 # Append summary to CSV
 echo "" >> "$OUTPUT_CSV"
 echo "total_runtime_mins,$script_total_mins" >> "$OUTPUT_CSV"
 echo "hit_rate,${hit_rate:-NA}" >> "$OUTPUT_CSV"
+echo "avg_loss,${avg_loss:-NA}" >> "$OUTPUT_CSV"
 
 echo ""
 echo "Total runtime: $script_total_mins mins"
