@@ -6,8 +6,10 @@ Automates: seed.md → Ontology → Graph → Simulation → Interview → price
 import os
 import sys
 import csv
+import json
 import time
 import re
+import hashlib
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -18,6 +20,39 @@ from common import project_root, resolve_path, LLMClient
 
 
 # ============== Helpers ==============
+
+def _load_graph_cache(sidecar_path: str, sha256: str):
+    """Return (project_id, graph_id) from sidecar if sha256 key exists, else None."""
+    if not os.path.exists(sidecar_path):
+        return None
+    try:
+        with open(sidecar_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        entry = data.get(sha256)
+        if entry:
+            return entry["project_id"], entry["graph_id"]
+    except (json.JSONDecodeError, KeyError):
+        pass
+    return None
+
+
+def _save_graph_cache(sidecar_path: str, sha256: str, project_id: str, graph_id: str) -> None:
+    """Add or update sha256 entry in the sidecar dict, preserving all other entries."""
+    data = {}
+    if os.path.exists(sidecar_path):
+        try:
+            with open(sidecar_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            data = {}
+    data[sha256] = {
+        "project_id": project_id,
+        "graph_id": graph_id,
+        "cached_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    with open(sidecar_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
 
 def poll(check_fn, interval=3, max_wait=600):
     """Poll check_fn() until it returns a truthy result or timeout."""
