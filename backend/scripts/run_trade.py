@@ -585,19 +585,20 @@ def main():
     cache_dir = os.path.join(seed_dir, ".cache")
     sidecar_path = os.path.join(cache_dir, seed_basename + ".json")
 
+    agent_count = count_agents_in_seed(seed_text)
+
     cached = _load_graph_cache(sidecar_path, seed_sha256)
     if cached:
-        project_id, graph_id = cached
-        print(f"[Cache] Hit — skipping steps 1 & 2 (sha256: {seed_sha256[:12]}...)")
+        project_id, graph_id, simulation_id = cached
+        print(f"[Cache] Hit — skipping steps 1, 2, 3 (sha256: {seed_sha256[:12]}...)")
     else:
         project_id = step1_generate_ontology(args.base_url, args.seed_file, requirement, session=session)
         graph_id = step2_build_graph(args.base_url, project_id, session=session)
+        simulation_id = step3_prepare_simulation(args.base_url, project_id, graph_id,
+                                                 agent_count=agent_count, session=session)
         os.makedirs(cache_dir, exist_ok=True)
-        _save_graph_cache(sidecar_path, seed_sha256, project_id, graph_id)
+        _save_graph_cache(sidecar_path, seed_sha256, project_id, graph_id, simulation_id)
         print(f"[Cache] Saved (sha256: {seed_sha256[:12]}...)")
-    agent_count = count_agents_in_seed(seed_text)
-    simulation_id = step3_prepare_simulation(args.base_url, project_id, graph_id,
-                                             agent_count=agent_count, session=session)
     sim_result = step4_run_simulation(args.base_url, simulation_id, max_rounds=args.rounds, session=session)
     forecasts = step5_interview_for_trades(args.base_url, simulation_id, llm, seed_text,
                                            args.predict_hours, session=session)
