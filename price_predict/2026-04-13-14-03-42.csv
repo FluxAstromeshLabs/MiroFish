@@ -1,0 +1,8 @@
+latest_chart_time,predicted_low,predicted_high,actual_low,actual_high,agent_count,simulation_rounds,runtime,loss
+2026-04-05 02:00,66888.88888888889,67272.22222222222,67072.1,67164.0,9,5,0.26123523712158203,291.4333333333343
+
+
+total_runtime_mins,0.3
+hit_rate,1.000000
+avg_loss,291.4333
+2026-04-05 01:00,66982.75,67255.0,66900.0,67151.1,10,5,0.3389803727467855

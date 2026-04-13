@@ -482,13 +482,27 @@ def step5_interview_for_trades(base_url, simulation_id, llm, seed_text, predict_
 
     if env_alive:
         print(f"  Found {agent_count} agents (platform: {platform}) — trying OASIS interview...")
-        try:
-            forecasts = _interview_agents(base_url, simulation_id, seed_text, predict_hours,
-                                          id_to_profile, platform, session=session)
-            if forecasts:
-                return forecasts
-        except Exception as e:
-            print(f"  Interview failed: {e}")
+        # Wait for the environment to enter command-wait mode (env_status.json → "alive").
+        # The monitor thread sets runner_status="completed" from action logs *before* the
+        # simulation process calls ipc_handler.update_status("alive"), creating a race window.
+        env_status_alive = False
+        for _ in range(60):  # up to 60 seconds
+            env_check = api("post", base_url, "/api/simulation/env-status",
+                            session=session, json={"simulation_id": simulation_id})
+            if env_check.get("env_alive"):
+                env_status_alive = True
+                break
+            time.sleep(1)
+        if not env_status_alive:
+            print(f"  Environment not ready for interview (timed out waiting for alive status)")
+        else:
+            try:
+                forecasts = _interview_agents(base_url, simulation_id, seed_text, predict_hours,
+                                              id_to_profile, platform, session=session)
+                if forecasts:
+                    return forecasts
+            except Exception as e:
+                print(f"  Interview failed: {e}")
 
     return _fallback_persona_decisions(llm, seed_text, id_to_profile, predict_hours)
 

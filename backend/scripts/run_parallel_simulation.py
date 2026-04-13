@@ -254,26 +254,43 @@ class ParallelIPCHandler:
             }, f, ensure_ascii=False, indent=2)
     
     def poll_command(self) -> Optional[Dict[str, Any]]:
-        """轮询获取待处理命令"""
+        """轮询获取待处理命令 (atomic claim via rename to prevent multiple processes handling same command)"""
         if not os.path.exists(self.commands_dir):
             return None
-        
+
         # 获取命令文件（按时间排序）
         command_files = []
         for filename in os.listdir(self.commands_dir):
             if filename.endswith('.json'):
                 filepath = os.path.join(self.commands_dir, filename)
                 command_files.append((filepath, os.path.getmtime(filepath)))
-        
+
         command_files.sort(key=lambda x: x[1])
-        
+
         for filepath, _ in command_files:
+            # Atomically claim the command by renaming it with our PID
+            # This prevents multiple processes from handling the same command
+            claimed_path = filepath + f".claimed.{os.getpid()}"
             try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, OSError):
+                os.rename(filepath, claimed_path)
+            except OSError:
+                # Another process already claimed this file, skip it
                 continue
-        
+
+            try:
+                with open(claimed_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                # Delete the claimed file after reading
+                os.remove(claimed_path)
+                return data
+            except (json.JSONDecodeError, OSError):
+                # Clean up claimed file if we can't read it
+                try:
+                    os.remove(claimed_path)
+                except OSError:
+                    pass
+                continue
+
         return None
     
     def send_response(self, command_id: str, status: str, result: Dict = None, error: str = None):
@@ -416,7 +433,7 @@ class ParallelIPCHandler:
     async def handle_batch_interview(self, command_id: str, interviews: List[Dict], platform: str = None) -> bool:
         """
         处理批量采访命令
-        
+
         Args:
             command_id: 命令ID
             interviews: [{"agent_id": int, "prompt": str, "platform": str(optional)}, ...]
@@ -425,11 +442,17 @@ class ParallelIPCHandler:
                 - "reddit": 只采访Reddit平台
                 - None/不指定: 每个Agent同时采访两个平台
         """
+        # Check if any environments are available
+        if not self.twitter_env and not self.reddit_env:
+            self.send_response(command_id, "failed", error="No simulation environments available (both Twitter and Reddit environments are closed or not initialized)")
+            print(f"  Error: No environments available for batch interview")
+            return False
+
         # 按平台分组
         twitter_interviews = []
         reddit_interviews = []
         both_platforms_interviews = []  # 需要同时采访两个平台的
-        
+
         for interview in interviews:
             item_platform = interview.get("platform", platform)
             if item_platform == "twitter":
@@ -439,19 +462,23 @@ class ParallelIPCHandler:
             else:
                 # 未指定平台：两个平台都采访
                 both_platforms_interviews.append(interview)
-        
+
         # 把 both_platforms_interviews 拆分到两个平台
         if both_platforms_interviews:
             if self.twitter_env:
                 twitter_interviews.extend(both_platforms_interviews)
             if self.reddit_env:
                 reddit_interviews.extend(both_platforms_interviews)
-        
+            # If neither environment is available, fallback to whichever is available
+            if not self.twitter_env and not self.reddit_env:
+                print(f"  Warning: No available platforms for both_platforms_interviews")
+
         results = {}
-        
+
         # 处理Twitter平台的采访
         if twitter_interviews and self.twitter_env:
             try:
+                print(f"  [Debug] Processing {len(twitter_interviews)} Twitter interviews")
                 twitter_actions = {}
                 for interview in twitter_interviews:
                     agent_id = interview.get("agent_id")
@@ -464,21 +491,31 @@ class ParallelIPCHandler:
                         )
                     except Exception as e:
                         print(f"  警告: 无法获取Twitter Agent {agent_id}: {e}")
-                
+
                 if twitter_actions:
+                    print(f"  [Debug] Sending {len(twitter_actions)} Twitter actions to environment")
                     await self.twitter_env.step(twitter_actions)
-                    
+                    print(f"  [Debug] Twitter step completed, retrieving results")
+
                     for interview in twitter_interviews:
                         agent_id = interview.get("agent_id")
                         result = self._get_interview_result(agent_id, "twitter")
                         result["platform"] = "twitter"
                         results[f"twitter_{agent_id}"] = result
+                        print(f"  [Debug] Twitter Agent {agent_id} result: {result}")
+                else:
+                    print(f"  [Debug] No valid Twitter agents found for interviews")
             except Exception as e:
                 print(f"  Twitter批量Interview失败: {e}")
-        
+                import traceback
+                traceback.print_exc()
+        elif twitter_interviews and not self.twitter_env:
+            print(f"  Warning: {len(twitter_interviews)} Twitter interviews requested but Twitter environment is not available")
+
         # 处理Reddit平台的采访
         if reddit_interviews and self.reddit_env:
             try:
+                print(f"  [Debug] Processing {len(reddit_interviews)} Reddit interviews")
                 reddit_actions = {}
                 for interview in reddit_interviews:
                     agent_id = interview.get("agent_id")
@@ -491,18 +528,27 @@ class ParallelIPCHandler:
                         )
                     except Exception as e:
                         print(f"  警告: 无法获取Reddit Agent {agent_id}: {e}")
-                
+
                 if reddit_actions:
+                    print(f"  [Debug] Sending {len(reddit_actions)} Reddit actions to environment")
                     await self.reddit_env.step(reddit_actions)
-                    
+                    print(f"  [Debug] Reddit step completed, retrieving results")
+
                     for interview in reddit_interviews:
                         agent_id = interview.get("agent_id")
                         result = self._get_interview_result(agent_id, "reddit")
                         result["platform"] = "reddit"
                         results[f"reddit_{agent_id}"] = result
+                        print(f"  [Debug] Reddit Agent {agent_id} result: {result}")
+                else:
+                    print(f"  [Debug] No valid Reddit agents found for interviews")
             except Exception as e:
                 print(f"  Reddit批量Interview失败: {e}")
-        
+                import traceback
+                traceback.print_exc()
+        elif reddit_interviews and not self.reddit_env:
+            print(f"  Warning: {len(reddit_interviews)} Reddit interviews requested but Reddit environment is not available")
+
         if results:
             self.send_response(command_id, "completed", result={
                 "interviews_count": len(results),
@@ -511,7 +557,19 @@ class ParallelIPCHandler:
             print(f"  批量Interview完成: {len(results)} 个Agent")
             return True
         else:
-            self.send_response(command_id, "failed", error="没有成功的采访")
+            # Provide more detailed error message
+            error_msg = "No successful interviews"
+            if not twitter_interviews and not reddit_interviews:
+                error_msg = "No interviews to process"
+            elif twitter_interviews and not self.twitter_env and reddit_interviews and not self.reddit_env:
+                error_msg = "All requested platforms are unavailable"
+            elif twitter_interviews and not self.twitter_env:
+                error_msg = f"Twitter interviews requested but environment unavailable. Reddit env available: {self.reddit_env is not None}"
+            elif reddit_interviews and not self.reddit_env:
+                error_msg = f"Reddit interviews requested but environment unavailable. Twitter env available: {self.twitter_env is not None}"
+
+            self.send_response(command_id, "failed", error=error_msg)
+            print(f"  Interview failed: {error_msg}")
             return False
     
     def _get_interview_result(self, agent_id: int, platform: str) -> Dict[str, Any]:

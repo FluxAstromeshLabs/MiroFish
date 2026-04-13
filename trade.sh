@@ -199,8 +199,13 @@ for ((i = 0; i < ${#seed_files[@]}; i++)); do
 done
 
 # Drain remaining active jobs
-for slot in "${!active_pids[@]}"; do
-    [[ -n "${active_pids[$slot]}" ]] && reap_one
+while true; do
+    has_active=false
+    for slot in "${!active_pids[@]}"; do
+        [[ -n "${active_pids[$slot]}" ]] && { has_active=true; break; }
+    done
+    [[ "$has_active" == false ]] && break
+    reap_one
 done
 
 # Brief delay to ensure all file writes complete
