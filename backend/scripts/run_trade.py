@@ -45,8 +45,8 @@ def _load_graph_cache(sidecar_path: str, sha256: str):
     return None
 
 
-def _save_graph_cache(sidecar_path: str, sha256: str, project_id: str, graph_id: str) -> None:
-    """Add or update sha256 entry in the sidecar dict, preserving all other entries."""
+def _save_graph_cache(sidecar_path: str, sha256: str, project_id: str, graph_id: str, simulation_id: str) -> None:
+    """Add or update sha256 entry in the sidecar dict with all three IDs, preserving all other entries."""
     data = {}
     if os.path.exists(sidecar_path):
         try:
@@ -57,6 +57,7 @@ def _save_graph_cache(sidecar_path: str, sha256: str, project_id: str, graph_id:
     data[sha256] = {
         "project_id": project_id,
         "graph_id": graph_id,
+        "simulation_id": simulation_id,
         "cached_at": datetime.now().isoformat(timespec="seconds"),
     }
     try:
