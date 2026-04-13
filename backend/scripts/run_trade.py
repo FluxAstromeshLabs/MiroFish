@@ -22,7 +22,11 @@ from common import project_root, resolve_path, LLMClient
 # ============== Helpers ==============
 
 def _load_graph_cache(sidecar_path: str, sha256: str):
-    """Return (project_id, graph_id) from sidecar if sha256 key exists, else None."""
+    """Return (project_id, graph_id, simulation_id) from sidecar if sha256 key exists, else None.
+
+    Returns None if the entry is incomplete (missing any required field).
+    Backward compatible with old sidecars that only have project_id + graph_id.
+    """
     if not os.path.exists(sidecar_path):
         return None
     try:
@@ -30,7 +34,12 @@ def _load_graph_cache(sidecar_path: str, sha256: str):
             data = json.load(f)
         entry = data.get(sha256)
         if entry:
-            return entry["project_id"], entry["graph_id"]
+            project_id = entry.get("project_id")
+            graph_id = entry.get("graph_id")
+            simulation_id = entry.get("simulation_id")
+            # Only return if all three fields present
+            if project_id and graph_id and simulation_id:
+                return project_id, graph_id, simulation_id
     except (json.JSONDecodeError, KeyError):
         pass
     return None
