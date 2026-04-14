@@ -1,8 +1,14 @@
 logs/
 marketdata/
+price_predict/
+.tmp
+test*.py
+docs/
+plot/
 seeds/
-news/
-###############
+
+#####################
+
 # OS
 .DS_Store
 Thumbs.db
