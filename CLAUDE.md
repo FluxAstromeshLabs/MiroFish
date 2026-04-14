@@ -1,11 +1,35 @@
-source backend/.venv/bin/activate
+## Architecture
+- This is a monorepo with a Vue frontend in frontend/ and a Flask backend in backend/.
+- Backend entrypoint: backend/run.py. Flask app wiring and blueprint registration are in backend/app/__init__.py.
+- API boundaries are split by blueprint:
+  - backend/app/api/graph.py for graph and project workflows.
+  - backend/app/api/simulation.py for simulation setup and execution.
+  - backend/app/api/report.py for report generation and report chat.
+- Business logic is in backend/app/services/. Keep route handlers thin and delegate non-trivial logic to services.
+- Shared backend helpers are in backend/app/utils/.
+- Frontend HTTP contracts are in frontend/src/api/. Keep API schema changes synchronized with backend endpoints.
 
-python3 backend/scripts/gen_seed.py \
-  --end-hour 2026-04-05T03 \
-  --hours 72 \
-  --count 3 \
-  --marketdata marketdata
+## Conventions
+- Preserve task/project state patterns in backend/app/models/task.py and backend/app/models/project.py (status enums + manager classes).
+- Keep JSON and logs UTF-8 safe. Do not remove existing encoding safeguards in backend/run.py, backend/app/__init__.py, and backend/app/utils/logger.py.
+- For transient external API failures, reuse retry helpers in backend/app/utils/retry.py instead of ad-hoc retry loops.
+- For uploaded content and generated artifacts, keep paths under backend/uploads/ and maintain existing project-scoped directory layout.
 
-pip3
+## Pitfalls
+- Simulation subprocess cleanup is important; preserve cleanup hooks and termination logic in simulation manager/runner paths.
 
-don't run bull shit test
+## Build And Test
+- Prerequisites: Node.js 18+, Python 3.11+, uv.
+- Install JS dependencies: npm run setup.
+- Install backend Python dependencies: npm run setup:backend.
+- Run full dev stack (frontend + backend): npm run dev.
+- Run only backend: npm run backend.
+- Run only frontend: npm run frontend.
+- Build frontend: npm run build.
+- Run backend script tests: source backend/.venv/bin/activate && pytest backend/scripts/test_*.py.
+
+## Run commands
+- gen seed data: python3 backend/scripts/gen_seed.py --end-hour 2026-04-05T03 --hours 4 --count 3
+- run backend: cd backend && source .venv/bin/activate && python run.py
+- run prediction: ./trade.sh 2026-04-05T01 10
+- calculate metrics: python3 backend/scripts/calc_range_hit.py price_predict/2026-04-10-12-39-06.csv
