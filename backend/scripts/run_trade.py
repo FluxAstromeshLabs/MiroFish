@@ -566,8 +566,8 @@ def main():
                         help="Flask server URL (default: http://localhost:5001)")
     parser.add_argument("--rounds", type=int, default=5,
                         help="Max simulation rounds (default: 5)")
-    parser.add_argument("--predict-hours", type=int, default=12,
-                        help="Forecast horizon in hours (default: 12)")
+    parser.add_argument("--predict-hours", type=int, default=1,
+                        help="Forecast horizon in hours (default: 1)")
     parser.add_argument("--aggregate", choices=["none", "average"], default="none",
                         help="Aggregate agent forecasts into one result (default: none)")
     parser.add_argument("--actual-low", type=float, default=None,
