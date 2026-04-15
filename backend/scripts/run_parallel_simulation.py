@@ -1,62 +1,61 @@
 """
-OASIS 双平台并行模拟预设脚本
-同时运行Twitter和Reddit模拟，读取相同的配置文件
+Preset OASIS dual-platform parallel simulation script.
+Runs Twitter and Reddit simulations together from the same config file.
 
-功能特性:
-- 双平台（Twitter + Reddit）并行模拟
-- 完成模拟后不立即关闭环境，进入等待命令模式
-- 支持通过IPC接收Interview命令
-- 支持单个Agent采访和批量采访
-- 支持远程关闭环境命令
+Features:
+- Parallel simulation across both Twitter and Reddit
+- Keeps the environment alive after the simulation finishes and enters command-wait mode
+- Supports Interview commands over IPC
+- Supports both single-agent and batch interviews
+- Supports remote environment shutdown
 
-使用方式:
+Usage:
     python run_parallel_simulation.py --config simulation_config.json
-    python run_parallel_simulation.py --config simulation_config.json --no-wait  # 完成后立即关闭
+    python run_parallel_simulation.py --config simulation_config.json --no-wait  # exit immediately after completion
     python run_parallel_simulation.py --config simulation_config.json --twitter-only
     python run_parallel_simulation.py --config simulation_config.json --reddit-only
 
-日志结构:
+Log layout:
     sim_xxx/
     ├── twitter/
-    │   └── actions.jsonl    # Twitter 平台动作日志
+    │   └── actions.jsonl    # Twitter action log
     ├── reddit/
-    │   └── actions.jsonl    # Reddit 平台动作日志
-    ├── simulation.log       # 主模拟进程日志
-    └── run_state.json       # 运行状态（API 查询用）
+    │   └── actions.jsonl    # Reddit action log
+    ├── simulation.log       # Main simulation process log
+    └── run_state.json       # Run state used by the API
 """
 
 # ============================================================
-# 解决 Windows 编码问题：在所有 import 之前设置 UTF-8 编码
-# 这是为了修复 OASIS 第三方库读取文件时未指定编码的问题
+# Fix Windows encoding behavior by setting UTF-8 before any imports.
+# This works around third-party OASIS code that reads files without specifying an encoding.
 # ============================================================
 import sys
 import os
 
 if sys.platform == 'win32':
-    # 设置 Python 默认 I/O 编码为 UTF-8
-    # 这会影响所有未指定编码的 open() 调用
+    # Set Python's default I/O encoding to UTF-8.
+    # This affects all open() calls that do not specify an encoding.
     os.environ.setdefault('PYTHONUTF8', '1')
     os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
     
-    # 重新配置标准输出流为 UTF-8（解决控制台中文乱码）
+    # Reconfigure standard streams as UTF-8.
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     if hasattr(sys.stderr, 'reconfigure'):
         sys.stderr.reconfigure(encoding='utf-8', errors='replace')
     
-    # 强制设置默认编码（影响 open() 函数的默认编码）
-    # 注意：这需要在 Python 启动时就设置，运行时设置可能不生效
-    # 所以我们还需要 monkey-patch 内置的 open 函数
+    # Force the default text encoding used by open().
+    # This ideally needs to happen at Python startup, so we also monkey-patch the built-in open().
     import builtins
     _original_open = builtins.open
     
     def _utf8_open(file, mode='r', buffering=-1, encoding=None, errors=None, 
                    newline=None, closefd=True, opener=None):
         """
-        包装 open() 函数，对于文本模式默认使用 UTF-8 编码
-        这可以修复第三方库（如 OASIS）读取文件时未指定编码的问题
+        Wrap `open()` so text mode defaults to UTF-8.
+        This fixes third-party libraries such as OASIS that read files without specifying an encoding.
         """
-        # 只对文本模式（非二进制）且未指定编码的情况设置默认编码
+        # Only set a default encoding for text mode when one is not provided.
         if encoding is None and 'b' not in mode:
             encoding = 'utf-8'
         return _original_open(file, mode, buffering, encoding, errors, 
@@ -77,52 +76,52 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 
-# 全局变量：用于信号处理
+# Global variables for signal handling.
 _shutdown_event = None
 _cleanup_done = False
 
-# 添加 backend 目录到路径
-# 脚本固定位于 backend/scripts/ 目录
+# Add the backend directory to the path.
+# This script lives under `backend/scripts/`.
 _scripts_dir = os.path.dirname(os.path.abspath(__file__))
 _backend_dir = os.path.abspath(os.path.join(_scripts_dir, '..'))
 _project_root = os.path.abspath(os.path.join(_backend_dir, '..'))
 sys.path.insert(0, _scripts_dir)
 sys.path.insert(0, _backend_dir)
 
-# 加载项目根目录的 .env 文件（包含 LLM_API_KEY 等配置）
+# Load the project root `.env` file, including settings such as `LLM_API_KEY`.
 from dotenv import load_dotenv
 _env_file = os.path.join(_project_root, '.env')
 if os.path.exists(_env_file):
     load_dotenv(_env_file)
-    print(f"已加载环境配置: {_env_file}")
+    print(f"Loaded environment config: {_env_file}")
 else:
-    # 尝试加载 backend/.env
+    # Try loading `backend/.env`.
     _backend_env = os.path.join(_backend_dir, '.env')
     if os.path.exists(_backend_env):
         load_dotenv(_backend_env)
-        print(f"已加载环境配置: {_backend_env}")
+        print(f"Loaded environment config: {_backend_env}")
 
 
 class MaxTokensWarningFilter(logging.Filter):
-    """过滤掉 camel-ai 关于 max_tokens 的警告（我们故意不设置 max_tokens，让模型自行决定）"""
+    """Filter out camel-ai max_tokens warnings; this script intentionally leaves max_tokens unset."""
     
     def filter(self, record):
-        # 过滤掉包含 max_tokens 警告的日志
+        # Filter out log records containing the max_tokens warning.
         if "max_tokens" in record.getMessage() and "Invalid or missing" in record.getMessage():
             return False
         return True
 
 
-# 在模块加载时立即添加过滤器，确保在 camel 代码执行前生效
+# Add the filter during module import so it applies before camel runs.
 logging.getLogger().addFilter(MaxTokensWarningFilter())
 
 
 def disable_oasis_logging():
     """
-    禁用 OASIS 库的详细日志输出
-    OASIS 的日志太冗余（记录每个 agent 的观察和动作），我们使用自己的 action_logger
+    Disable verbose OASIS logging.
+    OASIS logs are too noisy because they record every agent observation and action; this script uses its own action logger.
     """
-    # 禁用 OASIS 的所有日志器
+    # Disable all OASIS loggers.
     oasis_loggers = [
         "social.agent",
         "social.twitter", 
@@ -133,22 +132,22 @@ def disable_oasis_logging():
     
     for logger_name in oasis_loggers:
         logger = logging.getLogger(logger_name)
-        logger.setLevel(logging.CRITICAL)  # 只记录严重错误
+        logger.setLevel(logging.CRITICAL)  # Keep only critical errors.
         logger.handlers.clear()
         logger.propagate = False
 
 
 def init_logging_for_simulation(simulation_dir: str):
     """
-    初始化模拟的日志配置
+    Initialize simulation logging.
     
     Args:
-        simulation_dir: 模拟目录路径
+        simulation_dir: Simulation directory path.
     """
-    # 禁用 OASIS 的详细日志
+    # Disable verbose OASIS logging.
     disable_oasis_logging()
     
-    # 清理旧的 log 目录（如果存在）
+    # Remove the old log directory if it exists.
     old_log_dir = os.path.join(simulation_dir, "log")
     if os.path.exists(old_log_dir):
         import shutil
@@ -169,12 +168,12 @@ try:
         generate_reddit_agent_graph
     )
 except ImportError as e:
-    print(f"错误: 缺少依赖 {e}")
-    print("请先安装: pip install oasis-ai camel-ai")
+    print(f"Error: missing dependency {e}")
+    print("Install dependencies first: pip install oasis-ai camel-ai")
     sys.exit(1)
 
 
-# Twitter可用动作（不包含INTERVIEW，INTERVIEW只能通过ManualAction手动触发）
+# Available Twitter actions. `INTERVIEW` is excluded and can only be triggered manually via `ManualAction`.
 TWITTER_ACTIONS = [
     ActionType.CREATE_POST,
     ActionType.LIKE_POST,
@@ -184,7 +183,7 @@ TWITTER_ACTIONS = [
     ActionType.QUOTE_POST,
 ]
 
-# Reddit可用动作（不包含INTERVIEW，INTERVIEW只能通过ManualAction手动触发）
+# Available Reddit actions. `INTERVIEW` is excluded and can only be triggered manually via `ManualAction`.
 REDDIT_ACTIONS = [
     ActionType.LIKE_POST,
     ActionType.DISLIKE_POST,
@@ -202,13 +201,13 @@ REDDIT_ACTIONS = [
 ]
 
 
-# IPC相关常量
+# IPC constants.
 IPC_COMMANDS_DIR = "ipc_commands"
 IPC_RESPONSES_DIR = "ipc_responses"
 ENV_STATUS_FILE = "env_status.json"
 
 class CommandType:
-    """命令类型常量"""
+    """Command type constants."""
     INTERVIEW = "interview"
     BATCH_INTERVIEW = "batch_interview"
     CLOSE_ENV = "close_env"
@@ -216,9 +215,8 @@ class CommandType:
 
 class ParallelIPCHandler:
     """
-    双平台IPC命令处理器
-    
-    管理两个平台的环境，处理Interview命令
+    Dual-platform IPC command handler.
+    Manages both platform environments and processes Interview commands.
     """
     
     def __init__(
@@ -239,12 +237,12 @@ class ParallelIPCHandler:
         self.responses_dir = os.path.join(simulation_dir, IPC_RESPONSES_DIR)
         self.status_file = os.path.join(simulation_dir, ENV_STATUS_FILE)
         
-        # 确保目录存在
+        # Ensure the directories exist.
         os.makedirs(self.commands_dir, exist_ok=True)
         os.makedirs(self.responses_dir, exist_ok=True)
     
     def update_status(self, status: str):
-        """更新环境状态"""
+        """Update environment status."""
         with open(self.status_file, 'w', encoding='utf-8') as f:
             json.dump({
                 "status": status,
@@ -254,7 +252,7 @@ class ParallelIPCHandler:
             }, f, ensure_ascii=False, indent=2)
     
     def poll_command(self) -> Optional[Dict[str, Any]]:
-        """轮询获取待处理命令"""
+        """Poll for pending commands."""
         if not os.path.exists(self.commands_dir):
             return None
         
