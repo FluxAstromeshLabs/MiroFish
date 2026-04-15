@@ -6,6 +6,8 @@ test*.py
 docs/
 plot/
 seeds/
+# Seed graph-id cache
+**/.cache/
 
 #####################
 
@@ -69,6 +71,3 @@ backend/uploads/
 
 # Docker 数据
 data/
-
-# Seed graph-id cache
-**/.cache/

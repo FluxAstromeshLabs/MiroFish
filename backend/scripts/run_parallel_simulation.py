@@ -72,6 +72,8 @@ import multiprocessing
 import random
 import signal
 import sqlite3
+import time
+import traceback
 import warnings
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
@@ -258,6 +260,17 @@ class ParallelIPCHandler:
         if not os.path.exists(self.commands_dir):
             return None
 
+        # Clean up stale .claimed.* files (left by crashed processes) older than 60 seconds
+        stale_threshold = 60
+        for filename in os.listdir(self.commands_dir):
+            if '.claimed.' in filename:
+                stale_path = os.path.join(self.commands_dir, filename)
+                try:
+                    if (time.time() - os.path.getmtime(stale_path)) > stale_threshold:
+                        os.remove(stale_path)
+                except OSError:
+                    pass
+
         # 获取命令文件（按时间排序）
         command_files = []
         for filename in os.listdir(self.commands_dir):
@@ -268,8 +281,8 @@ class ParallelIPCHandler:
         command_files.sort(key=lambda x: x[1])
 
         for filepath, _ in command_files:
-            # Atomically claim the command by renaming it with our PID
-            # This prevents multiple processes from handling the same command
+            # Atomically claim the command by renaming it with our PID.
+            # Ownership transfers to send_response, which deletes the claimed file.
             claimed_path = filepath + f".claimed.{os.getpid()}"
             try:
                 os.rename(filepath, claimed_path)
@@ -280,11 +293,9 @@ class ParallelIPCHandler:
             try:
                 with open(claimed_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                # Delete the claimed file after reading
-                os.remove(claimed_path)
                 return data
             except (json.JSONDecodeError, OSError):
-                # Clean up claimed file if we can't read it
+                # Unreadable file — clean it up and move on
                 try:
                     os.remove(claimed_path)
                 except OSError:
@@ -307,12 +318,19 @@ class ParallelIPCHandler:
         with open(response_file, 'w', encoding='utf-8') as f:
             json.dump(response, f, ensure_ascii=False, indent=2)
         
-        # 删除命令文件
+        # Delete command file — try both the original name and any claimed variant
         command_file = os.path.join(self.commands_dir, f"{command_id}.json")
         try:
             os.remove(command_file)
         except OSError:
             pass
+        # Clean up the .claimed.* file left by poll_command
+        for filename in os.listdir(self.commands_dir):
+            if filename.startswith(f"{command_id}.json.claimed."):
+                try:
+                    os.remove(os.path.join(self.commands_dir, filename))
+                except OSError:
+                    pass
     
     def _get_env_and_graph(self, platform: str):
         """
@@ -469,9 +487,6 @@ class ParallelIPCHandler:
                 twitter_interviews.extend(both_platforms_interviews)
             if self.reddit_env:
                 reddit_interviews.extend(both_platforms_interviews)
-            # If neither environment is available, fallback to whichever is available
-            if not self.twitter_env and not self.reddit_env:
-                print(f"  Warning: No available platforms for both_platforms_interviews")
 
         results = {}
 
@@ -490,7 +505,7 @@ class ParallelIPCHandler:
                             action_args={"prompt": prompt}
                         )
                     except Exception as e:
-                        print(f"  警告: 无法获取Twitter Agent {agent_id}: {e}")
+                        print(f"  Warning: could not get Twitter Agent {agent_id}: {e}")
 
                 if twitter_actions:
                     print(f"  [Debug] Sending {len(twitter_actions)} Twitter actions to environment")
@@ -506,8 +521,7 @@ class ParallelIPCHandler:
                 else:
                     print(f"  [Debug] No valid Twitter agents found for interviews")
             except Exception as e:
-                print(f"  Twitter批量Interview失败: {e}")
-                import traceback
+                print(f"  Twitter batch interview failed: {e}")
                 traceback.print_exc()
         elif twitter_interviews and not self.twitter_env:
             print(f"  Warning: {len(twitter_interviews)} Twitter interviews requested but Twitter environment is not available")
@@ -527,7 +541,7 @@ class ParallelIPCHandler:
                             action_args={"prompt": prompt}
                         )
                     except Exception as e:
-                        print(f"  警告: 无法获取Reddit Agent {agent_id}: {e}")
+                        print(f"  Warning: could not get Reddit Agent {agent_id}: {e}")
 
                 if reddit_actions:
                     print(f"  [Debug] Sending {len(reddit_actions)} Reddit actions to environment")
@@ -543,8 +557,7 @@ class ParallelIPCHandler:
                 else:
                     print(f"  [Debug] No valid Reddit agents found for interviews")
             except Exception as e:
-                print(f"  Reddit批量Interview失败: {e}")
-                import traceback
+                print(f"  Reddit batch interview failed: {e}")
                 traceback.print_exc()
         elif reddit_interviews and not self.reddit_env:
             print(f"  Warning: {len(reddit_interviews)} Reddit interviews requested but Reddit environment is not available")
@@ -564,9 +577,9 @@ class ParallelIPCHandler:
             elif twitter_interviews and not self.twitter_env and reddit_interviews and not self.reddit_env:
                 error_msg = "All requested platforms are unavailable"
             elif twitter_interviews and not self.twitter_env:
-                error_msg = f"Twitter interviews requested but environment unavailable. Reddit env available: {self.reddit_env is not None}"
+                error_msg = "Twitter environment unavailable"
             elif reddit_interviews and not self.reddit_env:
-                error_msg = f"Reddit interviews requested but environment unavailable. Twitter env available: {self.twitter_env is not None}"
+                error_msg = "Reddit environment unavailable"
 
             self.send_response(command_id, "failed", error=error_msg)
             print(f"  Interview failed: {error_msg}")

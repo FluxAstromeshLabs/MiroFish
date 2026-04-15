@@ -189,7 +189,7 @@ def format_liquidations_json(liq: dict) -> str:
     return "# Liquidations\n" + json.dumps({"long": liq["long"], "short": liq["short"]})
 
 
-def load_news(news_dir: str, end_dt: datetime, hours: int) -> str:
+def load_news(news_dir: str, end_dt: datetime) -> str:
     """Load news from news/YYYY-MM-DDTHH.md file if it exists."""
     news_file = os.path.join(news_dir, end_dt.strftime("%Y-%m-%dT%H.md"))
     if os.path.exists(news_file):
@@ -270,7 +270,7 @@ def main():
 
         candles = load_ohlcv_window(marketdata_dir, seed_end, args.hours)
         liq = load_liq_window(marketdata_dir, seed_end, args.hours)
-        news_content = load_news(news_dir, seed_end, args.hours)
+        news_content = load_news(news_dir, seed_end)
 
         content = "\n\n".join([
             format_chart_time(seed_end),

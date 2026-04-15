@@ -1569,38 +1569,6 @@ def start_simulation():
                         logger.warning(f"清理日志时出现警告: {cleanup_result.get('errors')}")
                     force_restarted = True
 
-                # Check if the environment is already running and waiting for commands (e.g., from cache reuse)
-                env_alive = SimulationRunner.check_env_alive(simulation_id)
-                logger.info(f"[DEBUG] 检查模拟 {simulation_id} 环境状态: {env_alive}")
-                if env_alive:
-                    # Environment is already alive and waiting for commands
-                    logger.info(f"模拟 {simulation_id} 环境已运行且等待命令，跳过启动新进程")
-                    run_state = SimulationRunner.get_run_state(simulation_id)
-                    if not run_state or run_state.runner_status.value not in ("completed", "idle"):
-                        # Create/update run state if not exists or in an old state
-                        run_state = SimulationRunState(
-                            simulation_id=simulation_id,
-                            runner_status=RunnerStatus.COMPLETED,
-                            total_rounds=0,
-                            total_simulation_hours=0,
-                            started_at=datetime.now().isoformat(),
-                            completed_at=datetime.now().isoformat(),
-                        )
-                        SimulationRunner._save_run_state(run_state)
-
-                    return jsonify({
-                        "success": True,
-                        "data": {
-                            "simulation_id": simulation_id,
-                            "runner_status": "completed",
-                            "message": "Environment already running, reusing existing instance",
-                            "process_pid": run_state.process_pid if run_state else None,
-                            "twitter_running": True,
-                            "reddit_running": True,
-                            "started_at": run_state.started_at if run_state else datetime.now().isoformat(),
-                        }
-                    })
-
                 # 进程不存在或已结束，重置状态为 ready
                 logger.info(f"模拟 {simulation_id} 准备工作已完成，重置状态为 ready（原状态: {state.status.value}）")
                 state.status = SimulationStatus.READY

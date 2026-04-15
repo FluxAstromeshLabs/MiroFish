@@ -313,6 +313,7 @@ class SimulationManager:
                 )
 
             # --- Profile generation task ---
+            # Pass graph_id to enable graph retrieval functionality, get richer context
             def _generate_profiles():
                 generator = OasisProfileGenerator(graph_id=state.graph_id)
 
@@ -327,6 +328,7 @@ class SimulationManager:
                             item_name=msg
                         )
 
+                # Set real-time save file path (prefer Reddit JSON format)
                 realtime_output_path = None
                 realtime_platform = "reddit"
                 if state.enable_reddit:
@@ -346,7 +348,8 @@ class SimulationManager:
                     output_platform=realtime_platform
                 )
 
-                # Save profile files
+                # Save Profile files (Note: Twitter uses CSV format, Reddit uses JSON format)
+                # Reddit has been saved in real-time during generation, save once more here to ensure completeness
                 if state.enable_reddit:
                     generator.save_profiles(
                         profiles=profiles,
@@ -363,6 +366,13 @@ class SimulationManager:
 
             # --- Config generation task ---
             def _generate_config():
+                if progress_callback:
+                    progress_callback(
+                        "generating_config", 0,
+                        "Analyzing simulation requirements...",
+                        current=0,
+                        total=3
+                    )
                 config_generator = SimulationConfigGenerator()
                 return config_generator.generate_config(
                     simulation_id=simulation_id,

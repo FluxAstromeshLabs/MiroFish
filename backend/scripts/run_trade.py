@@ -93,13 +93,12 @@ def api(method, base_url, path, session=None, **kwargs):
 
 
 def count_agents_in_seed(seed_text):
-    """Count agent entries in the # Agents section of seed.md."""
-    if "# Agents" in seed_text:
-        agents_section = seed_text.split("# Agents", 1)[1]
-    else:
-        agents_section = seed_text
-    lines = [l for l in agents_section.strip().splitlines() if l.strip()]
-    return max(len(lines), 6)
+    """Count agent bullet entries under '# Agents Population' in seed.md."""
+    if "# Agents Population" in seed_text:
+        agents_section = seed_text.split("# Agents Population", 1)[1]
+        lines = [l for l in agents_section.splitlines() if l.strip().startswith("- ")]
+        return max(len(lines), 6)
+    return 6
 
 
 def strip_agents_section(seed_text):
@@ -318,6 +317,7 @@ def _average_forecasts(forecasts):
     avg_high = sum(highs) / len(highs)
 
     if avg_low >= avg_high:
+        print(f"Warning: degenerate consensus range (avg_low={avg_low}, avg_high={avg_high}), adjusting")
         avg_high = avg_low + 1e-6
 
     return [{
@@ -478,9 +478,12 @@ def step5_interview_for_trades(base_url, simulation_id, llm, seed_text, predict_
     agent_count = len(id_to_profile)
 
     run_status = api("get", base_url, f"/api/simulation/{simulation_id}/run-status", session=session)
-    env_alive = run_status.get("runner_status") not in ("stopped", "failed", "idle")
+    runner_status = run_status.get("runner_status")
+    env_alive = runner_status not in ("stopped", "failed", "idle")
 
-    if env_alive:
+    # Also attempt interview when runner shows "completed" — the env may still be alive
+    # in command-wait mode. We check env_alive status below to confirm before sending.
+    if env_alive or runner_status == "completed":
         print(f"  Found {agent_count} agents (platform: {platform}) — trying OASIS interview...")
         # Wait for the environment to enter command-wait mode (env_status.json → "alive").
         # The monitor thread sets runner_status="completed" from action logs *before* the
@@ -527,12 +530,11 @@ def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
         "runtime",
     ]
 
-    file_exists = os.path.exists(output_path)
     with open(output_path, "a", newline="", encoding="utf-8") as f:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)  # Exclusive lock: wait until lock is available
         try:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
-            if not file_exists:
+            if f.tell() == 0:  # Check inside lock to avoid race between processes
                 writer.writeheader()
             writer.writerow({
                 "latest_chart_time": latest_chart_time,

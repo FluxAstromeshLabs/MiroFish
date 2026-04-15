@@ -331,7 +331,7 @@ class SimulationRunner:
             )
 
             if result.stdout:
-                pids = [int(pid) for pid in result.stdout.strip().split('\n') if pid]
+                pids = [int(pid) for pid in filter(None, result.stdout.strip().split('\n'))]
                 for pid in pids:
                     try:
                         # Try graceful termination first
@@ -340,6 +340,8 @@ class SimulationRunner:
                     except (ProcessLookupError, OSError) as e:
                         logger.debug(f"Failed to terminate {pid}: {e}")
                         try:
+                            # Give process time to exit gracefully before force kill
+                            time.sleep(0.5)
                             # Force kill if graceful termination fails
                             os.killpg(os.getpgid(pid), signal.SIGKILL)
                         except (ProcessLookupError, OSError):

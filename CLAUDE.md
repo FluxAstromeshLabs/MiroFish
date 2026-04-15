@@ -2,8 +2,8 @@
 - requirements: marketdata/2026-04-05/ohlcv.csv, news/2026-04-05T01.md
 - gen seed data: python3 backend/scripts/gen_seed.py --end-hour 2026-04-05T03 --hours 4 --count 3
 - run backend: cd backend && source .venv/bin/activate && python run.py
-- run prediction: ./trade.sh 2026-04-05T01 10
-- calculate metrics: python3 backend/scripts/calc_range_hit.py price_predict/2026-04-10-12-39-06.csv
+- run prediction: ./run.sh 2026-04-05T01 10
+- calculate metrics: python3 backend/scripts/calc_metrics.py price_predict/2026-04-10-12-39-06.csv
 
 ## Architecture
 - This is a monorepo with a Vue frontend in frontend/ and a Flask backend in backend/.

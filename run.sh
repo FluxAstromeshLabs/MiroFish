@@ -216,7 +216,7 @@ script_end=$(date +%s.%N)
 script_total_mins=$(awk "BEGIN {printf \"%.1f\", ($script_end - $script_start) / 60}")
 
 echo "Scoring results..."
-score_output=$("$VENV_PYTHON" "$ROOT/backend/scripts/calc_range_hit.py" "$OUTPUT_CSV")
+score_output=$("$VENV_PYTHON" "$ROOT/backend/scripts/calc_metrics.py" "$OUTPUT_CSV")
 echo "$score_output"
 
 hit_rate=$(echo "$score_output" | grep '^hit_rate=' | cut -d= -f2)

@@ -98,16 +98,12 @@ class GraphBuilderService:
 
     def _call_zep_with_retry(self, func: Callable, *args, operation: str, **kwargs):
         """Execute a Zep API call with retry on transient transport failures."""
-        try:
-            return self.retry_client.call_with_retry(
-                func,
-                *args,
-                exceptions=self.retryable_exceptions,
-                **kwargs,
-            )
-        except self.retryable_exceptions as e:
-            logger.error(f"Zep operation failed after retries: {operation}: {str(e)}")
-            raise
+        return self.retry_client.call_with_retry(
+            func,
+            *args,
+            exceptions=self.retryable_exceptions,
+            **kwargs,
+        )
     
     def build_graph_async(
         self,
@@ -394,7 +390,7 @@ class GraphBuilderService:
                             episode_uuids.append(ep_uuid)
                 
                 # Avoid sending requests too quickly
-                time.sleep(0.2)
+                time.sleep(0.5)
                 
             except Exception as e:
                 if progress_callback:
@@ -458,7 +454,7 @@ class GraphBuilderService:
                 )
             
             if pending_episodes:
-                time.sleep(2) # Check every 2 seconds
+                time.sleep(2.5) # Check every 2.5 seconds
         
         if progress_callback:
             progress_callback(f"Processing complete: {completed_count}/{total_episodes}", 1.0)
