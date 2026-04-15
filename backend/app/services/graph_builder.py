@@ -231,7 +231,7 @@ class GraphBuilderService:
                 attr_desc = attr_def.get("description", attr_name)
                 # The Zep API requires Field descriptions.
                 attrs[attr_name] = Field(description=attr_desc, default=None)
-                annotations[attr_name] = Optional[EntityText]  # 类型注解
+                annotations[attr_name] = Optional[EntityText]  # type annotation
             
             attrs["__annotations__"] = annotations
             
@@ -255,7 +255,7 @@ class GraphBuilderService:
                 attr_desc = attr_def.get("description", attr_name)
                 # The Zep API requires Field descriptions.
                 attrs[attr_name] = Field(description=attr_desc, default=None)
-                annotations[attr_name] = Optional[str]  # 边属性用str类型
+                annotations[attr_name] = Optional[str]  # edge attributes use `str` type
             
             attrs["__annotations__"] = annotations
             
@@ -321,19 +321,19 @@ class GraphBuilderService:
                     episodes=episodes
                 )
                 
-                # 收集返回的 episode uuid
+                # Collect returned episode UUIDs
                 if batch_result and isinstance(batch_result, list):
                     for ep in batch_result:
                         ep_uuid = getattr(ep, 'uuid_', None) or getattr(ep, 'uuid', None)
                         if ep_uuid:
                             episode_uuids.append(ep_uuid)
                 
-                # 避免请求过快
+                # Avoid sending requests too quickly
                 time.sleep(1)
                 
             except Exception as e:
                 if progress_callback:
-                    progress_callback(f"批次 {batch_num} 发送失败: {str(e)}", 0)
+                    progress_callback(f"Batch {batch_num} failed to send: {str(e)}", 0)
                 raise
         
         return episode_uuids
@@ -344,10 +344,10 @@ class GraphBuilderService:
         progress_callback: Optional[Callable] = None,
         timeout: int = 600
     ):
-        """等待所有 episode 处理完成（通过查询每个 episode 的 processed 状态）"""
+        """Wait until all episodes are processed by checking each episode's `processed` status"""
         if not episode_uuids:
             if progress_callback:
-                progress_callback("无需等待（没有 episode）", 1.0)
+                progress_callback("No waiting required (no episodes)", 1.0)
             return
         
         start_time = time.time()
@@ -356,18 +356,18 @@ class GraphBuilderService:
         total_episodes = len(episode_uuids)
         
         if progress_callback:
-            progress_callback(f"开始等待 {total_episodes} 个文本块处理...", 0)
+            progress_callback(f"Start waiting for {total_episodes} text chunks to be processed...", 0)
         
         while pending_episodes:
             if time.time() - start_time > timeout:
                 if progress_callback:
                     progress_callback(
-                        f"部分文本块超时，已完成 {completed_count}/{total_episodes}",
+                        f"Some text chunks timed out, completed {completed_count}/{total_episodes}",
                         completed_count / total_episodes
                     )
                 break
             
-            # 检查每个 episode 的处理状态
+            # Check the processing state of each episode
             for ep_uuid in list(pending_episodes):
                 try:
                     episode = self.client.graph.episode.get(uuid_=ep_uuid)
@@ -378,31 +378,31 @@ class GraphBuilderService:
                         completed_count += 1
                         
                 except Exception as e:
-                    # 忽略单个查询错误，继续
+                    # Ignore individual query errors and continue
                     pass
             
             elapsed = int(time.time() - start_time)
             if progress_callback:
                 progress_callback(
-                    f"Zep处理中... {completed_count}/{total_episodes} 完成, {len(pending_episodes)} 待处理 ({elapsed}秒)",
+                    f"Zep processing... {completed_count}/{total_episodes} complete, {len(pending_episodes)} pending ({elapsed}seconds)",
                     completed_count / total_episodes if total_episodes > 0 else 0
                 )
             
             if pending_episodes:
-                time.sleep(3)  # 每3秒检查一次
+                time.sleep(3)  # Check every 3 seconds.
         
         if progress_callback:
-            progress_callback(f"处理完成: {completed_count}/{total_episodes}", 1.0)
+            progress_callback(f"Processing complete: {completed_count}/{total_episodes}", 1.0)
     
     def _get_graph_info(self, graph_id: str) -> GraphInfo:
-        """获取图谱信息"""
-        # 获取节点（分页）
+        """Get graph information"""
+        # Get nodes (paginated)
         nodes = fetch_all_nodes(self.client, graph_id)
 
-        # 获取边（分页）
+        # Get edges (paginated)
         edges = fetch_all_edges(self.client, graph_id)
 
-        # 统计实体类型
+        # Count entity types for statistics.
         entity_types = set()
         for node in nodes:
             if node.labels:
@@ -419,25 +419,25 @@ class GraphBuilderService:
     
     def get_graph_data(self, graph_id: str) -> Dict[str, Any]:
         """
-        获取完整图谱数据（包含详细信息）
+        Get complete graph data, including detailed information
         
         Args:
-            graph_id: 图谱ID
+            graph_id: graph ID
             
         Returns:
-            包含nodes和edges的字典，包括时间信息、属性等详细数据
+            A dictionary containing nodes and edges, including timestamps, attributes, and other details.
         """
         nodes = fetch_all_nodes(self.client, graph_id)
         edges = fetch_all_edges(self.client, graph_id)
 
-        # 创建节点映射用于获取节点名称
+        # Build a node map to resolve node names
         node_map = {}
         for node in nodes:
             node_map[node.uuid_] = node.name or ""
         
         nodes_data = []
         for node in nodes:
-            # 获取创建时间
+            # Get creation time
             created_at = getattr(node, 'created_at', None)
             if created_at:
                 created_at = str(created_at)
@@ -453,20 +453,20 @@ class GraphBuilderService:
         
         edges_data = []
         for edge in edges:
-            # 获取时间信息
+            # Get temporal information
             created_at = getattr(edge, 'created_at', None)
             valid_at = getattr(edge, 'valid_at', None)
             invalid_at = getattr(edge, 'invalid_at', None)
             expired_at = getattr(edge, 'expired_at', None)
             
-            # 获取 episodes
+            # Get episodes
             episodes = getattr(edge, 'episodes', None) or getattr(edge, 'episode_ids', None)
             if episodes and not isinstance(episodes, list):
                 episodes = [str(episodes)]
             elif episodes:
                 episodes = [str(e) for e in episodes]
             
-            # 获取 fact_type
+            # Get fact_type
             fact_type = getattr(edge, 'fact_type', None) or edge.name or ""
             
             edges_data.append({
@@ -495,5 +495,5 @@ class GraphBuilderService:
         }
     
     def delete_graph(self, graph_id: str):
-        """删除图谱"""
+        """Delete graph"""
         self.client.graph.delete(graph_id=graph_id)

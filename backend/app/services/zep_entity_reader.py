@@ -118,7 +118,7 @@ class ZepEntityReader:
                         f"retrying in {delay:.1f}s..."
                     )
                     time.sleep(delay)
-                    delay *= 2  # 指数退避
+                    delay *= 2  # exponential backoff
                 else:
                     logger.error(f"Zep {operation_name} still failed after {max_retries} attempts: {str(e)}")
         
@@ -320,8 +320,8 @@ class ZepEntityReader:
             
             filtered_entities.append(entity)
         
-        logger.info(f"筛选完成: 总节点 {total_count}, 符合条件 {len(filtered_entities)}, "
-                   f"实体类型: {entity_types_found}")
+        logger.info(f"Filtering complete: total nodes {total_count}, matching {len(filtered_entities)}, "
+                   f"entity types: {entity_types_found}")
         
         return FilteredEntities(
             entities=filtered_entities,
@@ -336,33 +336,33 @@ class ZepEntityReader:
         entity_uuid: str
     ) -> Optional[EntityNode]:
         """
-        获取单个实体及其完整上下文（边和关联节点，带重试机制）
+        Get a single entity with its full context (edges and linked nodes, with retries)
         
         Args:
-            graph_id: 图谱ID
-            entity_uuid: 实体UUID
+            graph_id: graph ID
+            entity_uuid: entity UUID
             
         Returns:
-            EntityNode或None
+            EntityNode or None
         """
         try:
-            # 使用重试机制获取节点
+            # Fetch the node with retries
             node = self._call_with_retry(
                 func=lambda: self.client.graph.node.get(uuid_=entity_uuid),
-                operation_name=f"获取节点详情(uuid={entity_uuid[:8]}...)"
+                operation_name=f"Get node details (uuid={entity_uuid[:8]}...)"
             )
             
             if not node:
                 return None
             
-            # 获取节点的边
+            # Get edges for the node
             edges = self.get_node_edges(entity_uuid)
             
-            # 获取所有节点用于关联查找
+            # Get all nodes for relationship lookup
             all_nodes = self.get_all_nodes(graph_id)
             node_map = {n["uuid"]: n for n in all_nodes}
             
-            # 处理相关边和节点
+            # Process related edges and nodes
             related_edges = []
             related_node_uuids = set()
             
@@ -384,7 +384,7 @@ class ZepEntityReader:
                     })
                     related_node_uuids.add(edge["source_node_uuid"])
             
-            # 获取关联节点信息
+            # Get related node information
             related_nodes = []
             for related_uuid in related_node_uuids:
                 if related_uuid in node_map:
@@ -407,7 +407,7 @@ class ZepEntityReader:
             )
             
         except Exception as e:
-            logger.error(f"获取实体 {entity_uuid} 失败: {str(e)}")
+            logger.error(f"Failed to get entity {entity_uuid} failed: {str(e)}")
             return None
     
     def get_entities_by_type(
@@ -417,15 +417,15 @@ class ZepEntityReader:
         enrich_with_edges: bool = True
     ) -> List[EntityNode]:
         """
-        获取指定类型的所有实体
+        Get all entities of a specified type
         
         Args:
-            graph_id: 图谱ID
-            entity_type: 实体类型（如 "Student", "PublicFigure" 等）
-            enrich_with_edges: 是否获取相关边信息
+            graph_id: graph ID
+            entity_type: entity type (such as "Student" or "PublicFigure")
+            enrich_with_edges: whether to include related edge information
             
         Returns:
-            实体列表
+            entity list
         """
         result = self.filter_defined_entities(
             graph_id=graph_id,

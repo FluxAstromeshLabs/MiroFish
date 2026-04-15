@@ -324,7 +324,7 @@ class SimulationManager:
                         item_name=msg
                     )
             
-            # 设置实时保存的文件路径（优先使用 Reddit JSON 格式）
+            # Set the realtime-save output path, preferring Reddit JSON format.
             realtime_output_path = None
             realtime_platform = "reddit"
             if state.enable_reddit:
@@ -338,20 +338,20 @@ class SimulationManager:
                 entities=filtered.entities,
                 use_llm=use_llm_for_profiles,
                 progress_callback=profile_progress,
-                graph_id=state.graph_id,  # 传入graph_id用于Zep检索
-                parallel_count=parallel_profile_count,  # 并行生成数量
-                realtime_output_path=realtime_output_path,  # 实时保存路径
-                output_platform=realtime_platform  # 输出格式
+                graph_id=state.graph_id,  # pass `graph_id` for Zep retrieval
+                parallel_count=parallel_profile_count,  # parallel generation count
+                realtime_output_path=realtime_output_path,  # realtime output path
+                output_platform=realtime_platform  # output format
             )
             
             state.profiles_count = len(profiles)
             
-            # 保存Profile文件（注意：Twitter使用CSV格式，Reddit使用JSON格式）
-            # Reddit 已经在生成过程中实时保存了，这里再保存一次确保完整性
+            # Save profile files (Twitter uses CSV, Reddit uses JSON).
+            # Reddit was already saved incrementally during generation; save once more here for completeness.
             if progress_callback:
                 progress_callback(
                     "generating_profiles", 95, 
-                    "保存Profile文件...",
+                    "Saving profile files...",
                     current=total_entities,
                     total=total_entities
                 )
@@ -364,7 +364,7 @@ class SimulationManager:
                 )
             
             if state.enable_twitter:
-                # Twitter使用CSV格式！这是OASIS的要求
+                # Twitter must use CSV format. This is required by OASIS.
                 generator.save_profiles(
                     profiles=profiles,
                     file_path=os.path.join(sim_dir, "twitter_profiles.csv"),
@@ -374,16 +374,16 @@ class SimulationManager:
             if progress_callback:
                 progress_callback(
                     "generating_profiles", 100, 
-                    f"完成，共 {len(profiles)} 个Profile",
+                    f"Completed, total {len(profiles)} profiles",
                     current=len(profiles),
                     total=len(profiles)
                 )
             
-            # ========== 阶段3: LLM智能生成模拟配置 ==========
+            # ========== Stage 3: LLM-generated simulation config ==========
             if progress_callback:
                 progress_callback(
                     "generating_config", 0, 
-                    "正在分析模拟需求...",
+                    "Analyzing simulation requirements...",
                     current=0,
                     total=3
                 )
@@ -393,7 +393,7 @@ class SimulationManager:
             if progress_callback:
                 progress_callback(
                     "generating_config", 30, 
-                    "正在调用LLM生成配置...",
+                    "Calling the LLM to generate the configuration...",
                     current=1,
                     total=3
                 )
@@ -412,12 +412,12 @@ class SimulationManager:
             if progress_callback:
                 progress_callback(
                     "generating_config", 70, 
-                    "正在保存配置文件...",
+                    "Saving the config file...",
                     current=2,
                     total=3
                 )
             
-            # 保存配置文件
+            # Save the config file
             config_path = os.path.join(sim_dir, "simulation_config.json")
             with open(config_path, 'w', encoding='utf-8') as f:
                 f.write(sim_params.to_json())
@@ -428,25 +428,25 @@ class SimulationManager:
             if progress_callback:
                 progress_callback(
                     "generating_config", 100, 
-                    "配置生成完成",
+                    "Config generation completed",
                     current=3,
                     total=3
                 )
             
-            # 注意：运行脚本保留在 backend/scripts/ 目录，不再复制到模拟目录
-            # 启动模拟时，simulation_runner 会从 scripts/ 目录运行脚本
+            # Keep runtime scripts in `backend/scripts/`; do not copy them into the simulation directory.
+            # When starting the simulation, `simulation_runner` runs scripts from the scripts directory.
             
-            # 更新状态
+            # Update state
             state.status = SimulationStatus.READY
             self._save_simulation_state(state)
             
-            logger.info(f"模拟准备完成: {simulation_id}, "
+            logger.info(f"Simulation preparation completed: {simulation_id}, "
                        f"entities={state.entities_count}, profiles={state.profiles_count}")
             
             return state
             
         except Exception as e:
-            logger.error(f"模拟准备失败: {simulation_id}, error={str(e)}")
+            logger.error(f"Simulation preparation failed: {simulation_id}, error={str(e)}")
             import traceback
             logger.error(traceback.format_exc())
             state.status = SimulationStatus.FAILED
@@ -455,16 +455,16 @@ class SimulationManager:
             raise
     
     def get_simulation(self, simulation_id: str) -> Optional[SimulationState]:
-        """获取模拟状态"""
+        """Get simulation state"""
         return self._load_simulation_state(simulation_id)
     
     def list_simulations(self, project_id: Optional[str] = None) -> List[SimulationState]:
-        """列出所有模拟"""
+        """List all simulations"""
         simulations = []
         
         if os.path.exists(self.SIMULATION_DATA_DIR):
             for sim_id in os.listdir(self.SIMULATION_DATA_DIR):
-                # 跳过隐藏文件（如 .DS_Store）和非目录文件
+                # Skip hidden files (such as .DS_Store) and non-directory entries
                 sim_path = os.path.join(self.SIMULATION_DATA_DIR, sim_id)
                 if sim_id.startswith('.') or not os.path.isdir(sim_path):
                     continue
@@ -477,10 +477,10 @@ class SimulationManager:
         return simulations
     
     def get_profiles(self, simulation_id: str, platform: str = "reddit") -> List[Dict[str, Any]]:
-        """获取模拟的Agent Profile"""
+        """Get simulation Agent Profiles"""
         state = self._load_simulation_state(simulation_id)
         if not state:
-            raise ValueError(f"模拟不存在: {simulation_id}")
+            raise ValueError(f"Simulation does not exist: {simulation_id}")
         
         sim_dir = self._get_simulation_dir(simulation_id)
         profile_path = os.path.join(sim_dir, f"{platform}_profiles.json")
@@ -492,7 +492,7 @@ class SimulationManager:
             return json.load(f)
     
     def get_simulation_config(self, simulation_id: str) -> Optional[Dict[str, Any]]:
-        """获取模拟配置"""
+        """Get simulation config"""
         sim_dir = self._get_simulation_dir(simulation_id)
         config_path = os.path.join(sim_dir, "simulation_config.json")
         
@@ -503,7 +503,7 @@ class SimulationManager:
             return json.load(f)
     
     def get_run_instructions(self, simulation_id: str) -> Dict[str, str]:
-        """获取运行说明"""
+        """Get run instructions"""
         sim_dir = self._get_simulation_dir(simulation_id)
         config_path = os.path.join(sim_dir, "simulation_config.json")
         scripts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../scripts'))
@@ -518,10 +518,10 @@ class SimulationManager:
                 "parallel": f"python {scripts_dir}/run_parallel_simulation.py --config {config_path}",
             },
             "instructions": (
-                f"1. 激活conda环境: conda activate MiroFish\n"
-                f"2. 运行模拟 (脚本位于 {scripts_dir}):\n"
-                f"   - 单独运行Twitter: python {scripts_dir}/run_twitter_simulation.py --config {config_path}\n"
-                f"   - 单独运行Reddit: python {scripts_dir}/run_reddit_simulation.py --config {config_path}\n"
-                f"   - 并行运行双平台: python {scripts_dir}/run_parallel_simulation.py --config {config_path}"
+                f"1. Activate the conda environment: conda activate MiroFish\n"
+                f"2. Run the simulation (scripts are located at {scripts_dir}):\n"
+                f"   - Run Twitter only: python {scripts_dir}/run_twitter_simulation.py --config {config_path}\n"
+                f"   - Run Reddit only: python {scripts_dir}/run_reddit_simulation.py --config {config_path}\n"
+                f"   - Run both platforms in parallel: python {scripts_dir}/run_parallel_simulation.py --config {config_path}"
             )
         }

@@ -161,7 +161,7 @@ const handleNextStep = (params = {}) => {
     currentStep.value++
     addLog(`Enter Step ${currentStep.value}: ${stepNames[currentStep.value - 1]}`)
     
-    // 如果是从 Step 2 进入 Step 3，记录模拟轮数配置
+    // If this transition is from Step 2 to Step 3, log the simulation round configuration
     if (currentStep.value === 3 && params.maxRounds) {
       addLog(`Custom simulation rounds: ${params.maxRounds}`)
     }
