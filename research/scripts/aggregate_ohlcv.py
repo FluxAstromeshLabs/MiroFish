@@ -4,6 +4,8 @@
 Usage:
     python aggregate_ohlcv.py --start-date "2026-03-01 00:00:00" --end-date "2026-03-31 23:59:59" --interval 15m [-o output.csv]
     python aggregate_ohlcv.py --start-date "2026-03-01 09:30:00" --end-date "2026-03-31 16:00:00" --interval 4h -o sol_4h.csv
+
+    python ./research/scripts/aggregate_ohlcv.py --start-date "2026-03-28 00:00:00" --end-date "2026-04-13 00:00:00" --interval 1h -o research/data/btc_1h.csv
 """
 
 import argparse
@@ -60,7 +62,7 @@ def bucket_start_ms(ts_ms: int, bucket: dict) -> int:
 
 DATA_DIR = os.path.join(
     os.path.dirname(__file__),
-    "..", "..", "..", "exchange-connectors", "marketdata", "data", "binance", "sol", "formatted",
+    "..", "..", "..", "exchange-connectors", "marketdata", "data", "binance", "btc", "formatted",
 )
 
 

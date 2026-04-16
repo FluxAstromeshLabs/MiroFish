@@ -1696,13 +1696,13 @@ Summary requirements:
 2. Highlight areas of agreement and disagreement
 3. Surface valuable quotes
 4. Stay objective and neutral
-5. Keep the summary under about 1000 Chinese characters
+5. Keep the summary under about 1000 English characters
 
 Formatting constraints:
 - Use plain-text paragraphs separated by blank lines
 - Do not use Markdown headings such as #, ##, or ###
 - Do not use dividers such as --- or ***
-- When quoting interviewees, use Chinese quotation marks 「」
+- When quoting interviewees, use English quotation marks 「」
 - You may use **bold** to emphasize keywords, but avoid other Markdown features"""
 
         user_prompt = f"""Interview topic: {interview_requirement}

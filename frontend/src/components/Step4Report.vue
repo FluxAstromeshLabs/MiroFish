@@ -1333,7 +1333,7 @@ const InterviewDisplay = {
       if (isPlaceholderText(answerText)) return ['']
 
       // Support two numbering formats:
-      // 1. "Question X:" or the previous Chinese format
+      // 1. "Question X:" or the previous English format
       // 2. "1. " or "\n1. " for legacy compatibility
       let matches = []
       let match
@@ -2094,10 +2094,10 @@ const extractFinalContent = (response) => {
     return finalAnswerMatch[1].trim()
   }
   
-  // Try to find content after the legacy Chinese final-answer label
-  const chineseFinalMatch = response.match(/\u6700\u7ec8\u7b54\u6848[:：]\s*\n*([\s\S]*)$/i)
-  if (chineseFinalMatch) {
-    return chineseFinalMatch[1].trim()
+  // Try to find content after the legacy English final-answer label
+  const EnglishFinalMatch = response.match(/\u6700\u7ec8\u7b54\u6848[:：]\s*\n*([\s\S]*)$/i)
+  if (EnglishFinalMatch) {
+    return EnglishFinalMatch[1].trim()
   }
   
   // If the response starts with ##, #, or >, it may already be direct markdown content

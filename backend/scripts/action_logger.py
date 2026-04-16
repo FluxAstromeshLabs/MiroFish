@@ -288,12 +288,12 @@ class ActionLogger:
             f.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
 
-# 全局日志实例（兼容旧接口）
+# Global logger instance (compatible with the legacy interface)
 _global_logger: Optional[ActionLogger] = None
 
 
 def get_logger(log_path: Optional[str] = None) -> ActionLogger:
-    """获取全局日志实例（兼容旧接口）"""
+    """Get the global logger instance (compatible with the legacy interface)."""
     global _global_logger
     
     if log_path:

@@ -675,7 +675,7 @@ class OasisProfileGenerator:
         """Get the system prompt."""
         base_prompt = (
             "You are an expert in generating social-media user profiles. Generate a detailed, realistic persona for public-opinion simulation while staying as faithful as possible to known real-world context. "
-            "You must return valid JSON, and string values must not contain unescaped newlines. Use Chinese."
+            "You must return valid JSON, and string values must not contain unescaped newlines. Use English."
         )
         return base_prompt
     
@@ -704,8 +704,8 @@ Context:
 
 Please return JSON with the following fields:
 
-1. bio: social-media bio, about 200 Chinese characters
-2. persona: detailed persona description (plain text, about 2000 Chinese characters), including:
+1. bio: social-media bio, about 200 English characters
+2. persona: detailed persona description (plain text, about 2000 English characters), including:
    - Basic information (age, occupation, education background, location)
    - Personal background (important experiences, connection to the event, social relationships)
    - Personality traits (MBTI, core traits, emotional style)
@@ -716,14 +716,14 @@ Please return JSON with the following fields:
 3. age: numeric age (must be an integer)
 4. gender: must be in English: "male" or "female"
 5. mbti: MBTI type (such as INTJ, ENFP)
-6. country: country (use Chinese, e.g. "China")
+6. country: country (use English, e.g. "England")
 7. profession: profession
 8. interested_topics: array of interested topics
 
 Important:
 - All field values must be strings or numbers; do not use newline characters
 - `persona` must be one coherent block of text
-- Use Chinese for the content, except the `gender` field which must be English `male` or `female`
+- Use English for the content, except the `gender` field which must be English `male` or `female`
 - Keep the content consistent with the entity information
 - `age` must be a valid integer and `gender` must be "male" or "female"
 """
@@ -753,8 +753,8 @@ Context:
 
 Please return JSON with the following fields:
 
-1. bio: official account bio, about 200 Chinese characters, professional and appropriate
-2. persona: detailed account profile description (plain text, about 2000 Chinese characters), including:
+1. bio: official account bio, about 200 English characters, professional and appropriate
+2. persona: detailed account profile description (plain text, about 2000 English characters), including:
    - Basic organizational information (official name, nature of the organization, founding background, main functions)
    - Account positioning (account type, target audience, core function)
    - Speaking style (language style, common phrasing, taboo topics)
@@ -765,14 +765,14 @@ Please return JSON with the following fields:
 3. age: always set to 30 (virtual age for organization accounts)
 4. gender: always set to "other" (organization accounts use `other`)
 5. mbti: MBTI type describing account style, such as ISTJ for strict and conservative
-6. country: country (use Chinese, e.g. "China")
+6. country: country (use English, e.g. "China")
 7. profession: description of organizational function
 8. interested_topics: array of followed domains
 
 Important:
 - All field values must be strings or numbers; null is not allowed
 - `persona` must be one coherent block of text with no newline characters
-- Use Chinese for the content, except the `gender` field which must be English `"other"`
+- Use English for the content, except the `gender` field which must be English `"other"`
 - `age` must be integer `30`, and `gender` must be the string `"other"`
 - The account's voice must match its institutional identity"""
     
@@ -1130,7 +1130,7 @@ Important:
         
         gender_lower = gender.lower().strip()
         
-        # Chinese-to-English mapping.
+        # English-to-English mapping.
         gender_map = {
             "\u7537": "male",
             "\u5973": "female",

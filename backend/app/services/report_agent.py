@@ -652,8 +652,8 @@ Focus on "what the future looks like" because the simulation result is the predi
 
 3. Keep language consistent.
    - Tool outputs may contain English or mixed-language text
-   - If the simulation requirement and source material are in Chinese, the report must be fully written in Chinese
-   - If you quote English or mixed-language tool output, translate it into fluent Chinese before writing it into the report
+   - If the simulation requirement and source material are in English, the report must be fully written in English
+   - If you quote English or mixed-language tool output, translate it into fluent English before writing it into the report
    - Preserve the original meaning and keep the wording natural
    - This rule applies to both body text and quote blocks
 

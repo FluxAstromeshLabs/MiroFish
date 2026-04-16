@@ -66,7 +66,7 @@ Return JSON in the following structure:
             "attributes": []
         }
     ],
-    "analysis_summary": "Brief analysis of the text content (Chinese)"
+    "analysis_summary": "Brief analysis of the text content (English)"
 }
 ```
 
