@@ -10,7 +10,7 @@ from datetime import datetime
 
 logger = logging.getLogger("mirofish.artifacts")
 
-DEFAULT_RUNS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "runs")
+DEFAULT_RUNS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cache", "runs")
 
 
 def slugify(text: str, max_len: int = 40) -> str:

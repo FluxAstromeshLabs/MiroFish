@@ -60,3 +60,4 @@ backend/uploads/
 data/
 
 .venv
+**/cache/
