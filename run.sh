@@ -126,7 +126,7 @@ launch_seed() {
     # Look up actual low/high from the next candle (seed_hour + 1h, all UTC)
     local actual_args=()
     local actual_low actual_high
-    read actual_low actual_high < <(
+    read actual_low actual_high prev_mid < <(
         "$VENV_PYTHON" - "$hour" "$ROOT/marketdata" <<'PYEOF'
 import sys, os, csv, datetime, calendar
 
@@ -139,6 +139,7 @@ next_day = next_dt.strftime("%Y-%m-%d")
 next_hour_ms = int(next_dt.timestamp()) * 1000
 next_hour_end_ms = next_hour_ms + 3_600_000
 
+# Next candle (actual)
 ohlcv_file = os.path.join(marketdata_dir, next_day, "ohlcv.csv")
 lo, hi = None, None
 if os.path.exists(ohlcv_file):
@@ -149,11 +150,30 @@ if os.path.exists(ohlcv_file):
                 l, h = float(row["L"]), float(row["H"])
                 lo = l if lo is None else min(lo, l)
                 hi = h if hi is None else max(hi, h)
-print(lo if lo is not None else "", hi if hi is not None else "")
+
+# Previous candle (T-1 from seed hour, for DA)
+prev_dt = dt - datetime.timedelta(hours=1)
+prev_day = prev_dt.strftime("%Y-%m-%d")
+prev_hour_ms = int(prev_dt.timestamp()) * 1000
+prev_hour_end_ms = prev_hour_ms + 3_600_000
+prev_ohlcv = os.path.join(marketdata_dir, prev_day, "ohlcv.csv")
+plo, phi = None, None
+if os.path.exists(prev_ohlcv):
+    with open(prev_ohlcv) as f:
+        for row in csv.DictReader(f):
+            t = int(row["T"])
+            if prev_hour_ms <= t < prev_hour_end_ms:
+                l, h = float(row["L"]), float(row["H"])
+                plo = l if plo is None else min(plo, l)
+                phi = h if phi is None else max(phi, h)
+prev_mid = (plo + phi) / 2 if plo is not None and phi is not None else ""
+
+print(lo if lo is not None else "", hi if hi is not None else "", prev_mid)
 PYEOF
     )
     [[ -n "$actual_low" ]] && actual_args+=(--actual-low "$actual_low")
     [[ -n "$actual_high" ]] && actual_args+=(--actual-high "$actual_high")
+    [[ -n "$prev_mid" ]] && actual_args+=(--prev-mid "$prev_mid")
 
     echo -n "[$job_num] $hour — running prediction..."
 
@@ -219,14 +239,14 @@ echo "Scoring results..."
 score_output=$("$VENV_PYTHON" "$ROOT/backend/scripts/calc_metrics.py" "$OUTPUT_CSV")
 echo "$score_output"
 
-hit_rate=$(echo "$score_output" | grep '^hit_rate=' | cut -d= -f2)
-avg_loss=$(echo "$score_output" | grep '^avg_loss=' | cut -d= -f2)
+mae=$(echo "$score_output" | grep '^MAE=' | cut -d= -f2)
+mda=$(echo "$score_output" | grep '^MDA=' | cut -d= -f2)
 
 # Append summary to CSV
 echo "" >> "$OUTPUT_CSV"
 echo "total_runtime_mins,$script_total_mins" >> "$OUTPUT_CSV"
-echo "hit_rate,${hit_rate:-NA}" >> "$OUTPUT_CSV"
-echo "avg_loss,${avg_loss:-NA}" >> "$OUTPUT_CSV"
+echo "MAE,${mae:-NA}" >> "$OUTPUT_CSV"
+echo "MDA,${mda:-NA}" >> "$OUTPUT_CSV"
 
 echo ""
 echo "Total runtime: $script_total_mins mins"

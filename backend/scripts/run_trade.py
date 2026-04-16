@@ -513,7 +513,7 @@ def step5_interview_for_trades(base_url, simulation_id, llm, seed_text, predict_
 # ============== CSV Output ==============
 
 def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
-              actual_low, actual_high, agent_count, simulation_rounds, runtime):
+              actual_low, actual_high, agent_count, simulation_rounds, runtime, prev_mid=None):
     """Write one summary row with prediction + metadata fields.
 
     If the file already exists, append a new row; otherwise create with header.
@@ -525,6 +525,7 @@ def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
         "predicted_high",
         "actual_low",
         "actual_high",
+        "prev_mid",
         "agent_count",
         "simulation_rounds",
         "runtime",
@@ -542,6 +543,7 @@ def write_csv(output_path, latest_chart_time, predicted_low, predicted_high,
                 "predicted_high": predicted_high,
                 "actual_low": actual_low,
                 "actual_high": actual_high,
+                "prev_mid": prev_mid if prev_mid is not None else "",
                 "agent_count": agent_count,
                 "simulation_rounds": simulation_rounds,
                 "runtime": runtime,
@@ -574,6 +576,8 @@ def main():
                         help="Optional actual next-candle low for backtest logging")
     parser.add_argument("--actual-high", type=float, default=None,
                         help="Optional actual next-candle high for backtest logging")
+    parser.add_argument("--prev-mid", type=float, default=None,
+                        help="Optional mid of the seed candle (for DA metric)")
     args = parser.parse_args()
 
     args.output = resolve_path(args.output)
@@ -653,6 +657,7 @@ def main():
             predicted_high=predicted_high,
             actual_low=args.actual_low,
             actual_high=args.actual_high,
+            prev_mid=args.prev_mid,
             agent_count=source_agent_count,
             simulation_rounds=sim_result.get("total_rounds", args.rounds),
             runtime=pipeline_elapsed,

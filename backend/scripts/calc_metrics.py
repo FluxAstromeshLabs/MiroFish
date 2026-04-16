@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
-"""Calculate range-hit metric from a forecast CSV.
+"""Calculate AE and DA metrics from a forecast CSV.
 
-Main metric:
-Range hit = actual_low >= predicted_low AND actual_high <= predicted_high
+Metrics per row:
+  AE  = |predicted_low - actual_low| + |predicted_high - actual_high|
+  DA  = 1 if sign(actual_mid - prev_mid) == sign(predicted_mid - prev_mid) else 0
+        (skipped when prev_mid is missing)
+
+Summary (appended to CSV):
+  MAE = mean AE across rows with full actual data
+  MDA = mean DA across rows with prev_mid available
 """
 
 import argparse
@@ -23,28 +29,37 @@ def parse_float(value):
         return None
 
 
+def sign(x):
+    if x > 0:
+        return 1
+    if x < 0:
+        return -1
+    return 0
+
+
 def evaluate_row(row):
+    """Return (ae, da) for a row. Either may be None if data is missing."""
     predicted_low = parse_float(row.get("predicted_low"))
     predicted_high = parse_float(row.get("predicted_high"))
     actual_low = parse_float(row.get("actual_low"))
     actual_high = parse_float(row.get("actual_high"))
+    prev_mid = parse_float(row.get("prev_mid"))
 
-    if None in (predicted_low, predicted_high, actual_low, actual_high):
-        return None, None
+    ae = None
+    if None not in (predicted_low, predicted_high, actual_low, actual_high):
+        ae = abs(predicted_low - actual_low) + abs(predicted_high - actual_high)
 
-    hit = actual_low >= predicted_low and actual_high <= predicted_high
-    if hit:
-        low_overshoot = max(0.0, actual_low - predicted_low)
-        high_overshoot = max(0.0, predicted_high - actual_high)
-        loss = low_overshoot + high_overshoot
-    else:
-        loss = None
+    da = None
+    if None not in (predicted_low, predicted_high, actual_low, actual_high, prev_mid):
+        actual_mid = (actual_low + actual_high) / 2
+        predicted_mid = (predicted_low + predicted_high) / 2
+        da = 1 if sign(actual_mid - prev_mid) == sign(predicted_mid - prev_mid) else 0
 
-    return hit, loss
+    return ae, da
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Calculate range-hit metric from CSV")
+    parser = argparse.ArgumentParser(description="Calculate AE/DA metrics from CSV")
     parser.add_argument("csv_file", help="Path to forecast CSV")
     args = parser.parse_args()
 
@@ -52,7 +67,6 @@ def main():
         print(f"Error: CSV file not found: {args.csv_file}")
         sys.exit(1)
 
-    # Read raw lines to separate header, data rows, and trailing summary lines
     with open(args.csv_file, newline="", encoding="utf-8") as f:
         raw_lines = f.readlines()
 
@@ -63,7 +77,7 @@ def main():
     header_line = raw_lines[0]
     fieldnames = [f.strip() for f in header_line.split(",")]
 
-    # Separate data rows (have same column count as header) from summary lines
+    # Separate data rows from trailing summary lines
     data_lines = []
     summary_lines = []
     for line in raw_lines[1:]:
@@ -76,65 +90,63 @@ def main():
         else:
             summary_lines.append(line)
 
-    # Parse data rows
     rows = list(csv.DictReader(data_lines, fieldnames=fieldnames))
 
     if not rows:
         print("No data rows found in CSV")
         sys.exit(1)
 
-    evaluated = 0
-    hits = 0
-    loss_values = []
+    ae_values = []
+    da_values = []
     results = []
 
     for row in rows:
-        hit, loss = evaluate_row(row)
-        results.append((row, hit, loss))
-        if hit is None:
-            continue
-        evaluated += 1
-        if hit:
-            hits += 1
-        if loss is not None:
-            loss_values.append(loss)
+        ae, da = evaluate_row(row)
+        results.append((row, ae, da))
+        if ae is not None:
+            ae_values.append(ae)
+        if da is not None:
+            da_values.append(da)
 
-    avg_loss = sum(loss_values) / len(loss_values) if loss_values else None
+    mae = sum(ae_values) / len(ae_values) if ae_values else None
+    mda = sum(da_values) / len(da_values) if da_values else None
 
-    # Build output fieldnames: insert 'loss' after 'runtime' if present, else append
+    # Build output fieldnames: insert 'ae' and 'da' after 'runtime' if present, else append
     out_fields = list(fieldnames)
-    if "loss" not in out_fields:
+    to_add = [m for m in ("ae", "da") if m not in out_fields]
+    if to_add:
         if "runtime" in out_fields:
-            idx = out_fields.index("runtime")
-            out_fields.insert(idx + 1, "loss")
+            idx = out_fields.index("runtime") + 1
+            for i, metric in enumerate(to_add):
+                out_fields.insert(idx + i, metric)
         else:
-            out_fields.append("loss")
+            out_fields.extend(to_add)
 
-    # Write updated CSV with loss column and cleaned summary lines
+    # Write updated CSV with ae/da columns and cleaned summary lines
     with open(args.csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=out_fields, extrasaction="ignore")
         writer.writeheader()
-        for row, hit, loss in results:
-            row["loss"] = "" if (hit is None or loss is None) else loss
+        for row, ae, da in results:
+            row["ae"] = "" if ae is None else f"{ae:.4f}"
+            row["da"] = "" if da is None else da
             writer.writerow(row)
 
-        # Append only valid summary lines (those with exactly 2 columns: key,value)
         f.write("\n")
         for line in summary_lines:
             cols = line.strip().split(",")
             if len(cols) == 2:
                 f.write(line)
 
-    print(f"evaluated_rows={evaluated}")
-    print(f"range_hits={hits}")
-    if evaluated > 0:
-        print(f"hit_rate={hits/evaluated:.6f}")
+    print(f"evaluated_rows={len(ae_values)}")
+    print(f"da_rows={len(da_values)}")
+    if mae is not None:
+        print(f"MAE={mae:.4f}")
     else:
-        print("hit_rate=NA")
-    if avg_loss is not None:
-        print(f"avg_loss={avg_loss:.4f}")
+        print("MAE=NA")
+    if mda is not None:
+        print(f"MDA={mda:.6f}")
     else:
-        print("avg_loss=NA")
+        print("MDA=NA")
 
 
 if __name__ == "__main__":
