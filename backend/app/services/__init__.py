@@ -1,5 +1,5 @@
 """
-业务服务模块
+Service modules.
 """
 
 from .ontology_generator import OntologyGenerator
@@ -70,4 +70,3 @@ __all__ = [
     'CommandType',
     'CommandStatus',
 ]
-

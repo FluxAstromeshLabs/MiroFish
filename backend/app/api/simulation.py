@@ -1,6 +1,6 @@
 """
-模拟相关API路由
-Step2: Zep实体读取与过滤、OASIS模拟准备与运行（全程自动化）
+Simulation-related API routes
+Step 2: Zep entity reading/filtering and OASIS simulation preparation/execution (fully automated).
 """
 
 import os
@@ -19,54 +19,54 @@ from ..models.project import ProjectManager
 logger = get_logger('mirofish.api.simulation')
 
 
-# Interview prompt 优化前缀
-# 添加此前缀可以避免Agent调用工具，直接用文本回复
-INTERVIEW_PROMPT_PREFIX = "结合你的人设、所有的过往记忆与行动，不调用任何工具直接用文本回复我："
+# Interview prompt optimization prefix
+# Adding this prefix prevents the Agent from calling tools and forces a plain-text reply.
+INTERVIEW_PROMPT_PREFIX = "Using your persona, all prior memories, and actions, reply to me directly in plain text without calling any tools: "
 
 
 def optimize_interview_prompt(prompt: str) -> str:
     """
-    优化Interview提问，添加前缀避免Agent调用工具
+    Optimize Interview prompts by adding a prefix to avoid Agent tool calls
     
     Args:
-        prompt: 原始提问
+        prompt: original prompt
         
     Returns:
-        优化后的提问
+        optimized prompt
     """
     if not prompt:
         return prompt
-    # 避免重复添加前缀
+    # Avoid adding the prefix twice
     if prompt.startswith(INTERVIEW_PROMPT_PREFIX):
         return prompt
     return f"{INTERVIEW_PROMPT_PREFIX}{prompt}"
 
 
-# ============== 实体读取接口 ==============
+# ============== Entity Read APIs ==============
 
 @simulation_bp.route('/entities/<graph_id>', methods=['GET'])
 def get_graph_entities(graph_id: str):
     """
-    获取图谱中的所有实体（已过滤）
+    Get all entities in the graph (filtered)
     
-    只返回符合预定义实体类型的节点（Labels不只是Entity的节点）
+    Returns only nodes that match predefined entity types (labels are not limited to Entity).
     
-    Query参数：
-        entity_types: 逗号分隔的实体类型列表（可选，用于进一步过滤）
-        enrich: 是否获取相关边信息（默认true）
+    Query parameters:
+        entity_types: comma-separated entity types (optional, for further filtering)
+        enrich: whether to include related edge info (default: true)
     """
     try:
         if not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,
-                "error": "ZEP_API_KEY未配置"
+                "error": "ZEP_API_KEY is not configured"
             }), 500
         
         entity_types_str = request.args.get('entity_types', '')
         entity_types = [t.strip() for t in entity_types_str.split(',') if t.strip()] if entity_types_str else None
         enrich = request.args.get('enrich', 'true').lower() == 'true'
         
-        logger.info(f"获取图谱实体: graph_id={graph_id}, entity_types={entity_types}, enrich={enrich}")
+        logger.info(f"Get graph entities: graph_id={graph_id}, entity_types={entity_types}, enrich={enrich}")
         
         reader = ZepEntityReader()
         result = reader.filter_defined_entities(
@@ -81,7 +81,7 @@ def get_graph_entities(graph_id: str):
         })
         
     except Exception as e:
-        logger.error(f"获取图谱实体失败: {str(e)}")
+        logger.error(f"Failed to get graph entities: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -91,12 +91,12 @@ def get_graph_entities(graph_id: str):
 
 @simulation_bp.route('/entities/<graph_id>/<entity_uuid>', methods=['GET'])
 def get_entity_detail(graph_id: str, entity_uuid: str):
-    """获取单个实体的详细信息"""
+    """Get detailed info for a single entity"""
     try:
         if not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,
-                "error": "ZEP_API_KEY未配置"
+                "error": "ZEP_API_KEY is not configured"
             }), 500
         
         reader = ZepEntityReader()
@@ -105,7 +105,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
         if not entity:
             return jsonify({
                 "success": False,
-                "error": f"实体不存在: {entity_uuid}"
+                "error": f"Entity not found: {entity_uuid}"
             }), 404
         
         return jsonify({
@@ -114,7 +114,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
         })
         
     except Exception as e:
-        logger.error(f"获取实体详情失败: {str(e)}")
+        logger.error(f"Failed to get entity details: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -124,12 +124,12 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
 
 @simulation_bp.route('/entities/<graph_id>/by-type/<entity_type>', methods=['GET'])
 def get_entities_by_type(graph_id: str, entity_type: str):
-    """获取指定类型的所有实体"""
+    """Get all entities of the specified type"""
     try:
         if not Config.ZEP_API_KEY:
             return jsonify({
                 "success": False,
-                "error": "ZEP_API_KEY未配置"
+                "error": "ZEP_API_KEY is not configured"
             }), 500
         
         enrich = request.args.get('enrich', 'true').lower() == 'true'
@@ -151,7 +151,7 @@ def get_entities_by_type(graph_id: str, entity_type: str):
         })
         
     except Exception as e:
-        logger.error(f"获取实体失败: {str(e)}")
+        logger.error(f"Failed to get entities: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -159,24 +159,24 @@ def get_entities_by_type(graph_id: str, entity_type: str):
         }), 500
 
 
-# ============== 模拟管理接口 ==============
+# ============== Simulation Management APIs ==============
 
 @simulation_bp.route('/create', methods=['POST'])
 def create_simulation():
     """
-    创建新的模拟
+    Create a new simulation
     
-    注意：max_rounds等参数由LLM智能生成，无需手动设置
+    Note: parameters such as `max_rounds` are generated by the LLM and do not need to be set manually.
     
-    请求（JSON）：
+    Request (JSON):
         {
-            "project_id": "proj_xxxx",      // 必填
-            "graph_id": "mirofish_xxxx",    // 可选，如不提供则从project获取
-            "enable_twitter": true,          // 可选，默认true
-            "enable_reddit": true            // 可选，默认true
+            "project_id": "proj_xxxx",      // required
+            "graph_id": "mirofish_xxxx",    // optional, falls back to project if omitted
+            "enable_twitter": true,          // optional, default true
+            "enable_reddit": true            // optional, default true
         }
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -197,21 +197,21 @@ def create_simulation():
         if not project_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 project_id"
+                "error": "Please provide project_id"
             }), 400
         
         project = ProjectManager.get_project(project_id)
         if not project:
             return jsonify({
                 "success": False,
-                "error": f"项目不存在: {project_id}"
+                "error": f"Project not found: {project_id}"
             }), 404
         
         graph_id = data.get('graph_id') or project.graph_id
         if not graph_id:
             return jsonify({
                 "success": False,
-                "error": "项目尚未构建图谱，请先调用 /api/graph/build"
+                "error": "The project graph has not been built yet. Call /api/graph/build first."
             }), 400
         
         manager = SimulationManager()
@@ -228,7 +228,7 @@ def create_simulation():
         })
         
     except Exception as e:
-        logger.error(f"创建模拟失败: {str(e)}")
+        logger.error(f"Failed to create simulation: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -238,16 +238,16 @@ def create_simulation():
 
 def _check_simulation_prepared(simulation_id: str) -> tuple:
     """
-    检查模拟是否已经准备完成
+    Check whether the simulation is fully prepared
     
-    检查条件：
+    Checks:
     1. state.json 存在且 status 为 "ready"
-    2. 必要文件存在：reddit_profiles.json, twitter_profiles.csv, simulation_config.json
+    2. required files exist: reddit_profiles.json, twitter_profiles.csv, simulation_config.json
     
-    注意：运行脚本(run_*.py)保留在 backend/scripts/ 目录，不再复制到模拟目录
+    Note: run_*.py scripts remain in backend/scripts/ and are no longer copied into the simulation directory.
     
     Args:
-        simulation_id: 模拟ID
+        simulation_id: simulation ID
         
     Returns:
         (is_prepared: bool, info: dict)
@@ -257,11 +257,11 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     
     simulation_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
     
-    # 检查目录是否存在
+    # Check whether the directory exists
     if not os.path.exists(simulation_dir):
-        return False, {"reason": "模拟目录不存在"}
+        return False, {"reason": "Simulation directory does not exist"}
     
-    # 必要文件列表（不包括脚本，脚本位于 backend/scripts/）
+    # Required files (excluding scripts, which live in backend/scripts/)
     required_files = [
         "state.json",
         "simulation_config.json",
@@ -269,7 +269,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         "twitter_profiles.csv"
     ]
     
-    # 检查文件是否存在
+    # Check whether files exist
     existing_files = []
     missing_files = []
     for f in required_files:
@@ -281,12 +281,12 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     
     if missing_files:
         return False, {
-            "reason": "缺少必要文件",
+            "reason": "Missing required files",
             "missing_files": missing_files,
             "existing_files": existing_files
         }
     
-    # 检查state.json中的状态
+    # Check the status in state.json
     state_file = os.path.join(simulation_dir, "state.json")
     try:
         import json
@@ -296,20 +296,20 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         status = state_data.get("status", "")
         config_generated = state_data.get("config_generated", False)
         
-        # 详细日志
-        logger.debug(f"检测模拟准备状态: {simulation_id}, status={status}, config_generated={config_generated}")
+        # Detailed log
+        logger.debug(f"Checking simulation preparation status: {simulation_id}, status={status}, config_generated={config_generated}")
         
-        # 如果 config_generated=True 且文件存在，认为准备完成
-        # 以下状态都说明准备工作已完成：
-        # - ready: 准备完成，可以运行
-        # - preparing: 如果 config_generated=True 说明已完成
-        # - running: 正在运行，说明准备早就完成了
-        # - completed: 运行完成，说明准备早就完成了
-        # - stopped: 已停止，说明准备早就完成了
-        # - failed: 运行失败（但准备是完成的）
+        # If `config_generated=True` and the files exist, preparation is treated as complete.
+        # The following statuses all indicate preparation is complete:
+        # - ready: prepared and ready to run
+        # - preparing: if config_generated=True, preparation is complete
+        # - running: running, which means preparation had already completed
+        # - completed: completed, which means preparation had already completed
+        # - stopped: stopped, which means preparation had already completed
+        # - failed: failed during execution (but preparation was complete)
         prepared_statuses = ["ready", "preparing", "running", "completed", "stopped", "failed"]
         if status in prepared_statuses and config_generated:
-            # 获取文件统计信息
+            # Get file statistics
             profiles_file = os.path.join(simulation_dir, "reddit_profiles.json")
             config_file = os.path.join(simulation_dir, "simulation_config.json")
             
@@ -319,7 +319,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                     profiles_data = json.load(f)
                     profiles_count = len(profiles_data) if isinstance(profiles_data, list) else 0
             
-            # 如果状态是preparing但文件已完成，自动更新状态为ready
+            # If the status is preparing but the files are complete, automatically update the status to ready.
             if status == "preparing":
                 try:
                     state_data["status"] = "ready"
@@ -327,12 +327,12 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                     state_data["updated_at"] = datetime.now().isoformat()
                     with open(state_file, 'w', encoding='utf-8') as f:
                         json.dump(state_data, f, ensure_ascii=False, indent=2)
-                    logger.info(f"自动更新模拟状态: {simulation_id} preparing -> ready")
+                    logger.info(f"Automatically updated simulation status: {simulation_id} preparing -> ready")
                     status = "ready"
                 except Exception as e:
-                    logger.warning(f"自动更新状态失败: {e}")
+                    logger.warning(f"Failed to auto-update status: {e}")
             
-            logger.info(f"模拟 {simulation_id} 检测结果: 已准备完成 (status={status}, config_generated={config_generated})")
+            logger.info(f"Simulation {simulation_id} check result: preparation completed (status={status}, config_generated={config_generated})")
             return True, {
                 "status": status,
                 "entities_count": state_data.get("entities_count", 0),
@@ -344,23 +344,23 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                 "existing_files": existing_files
             }
         else:
-            logger.warning(f"模拟 {simulation_id} 检测结果: 未准备完成 (status={status}, config_generated={config_generated})")
+            logger.warning(f"Simulation {simulation_id} check result: preparation not completed (status={status}, config_generated={config_generated})")
             return False, {
-                "reason": f"状态不在已准备列表中或config_generated为false: status={status}, config_generated={config_generated}",
+                "reason": f"status is not in the prepared list or config_generated is false: status={status}, config_generated={config_generated}",
                 "status": status,
                 "config_generated": config_generated
             }
             
     except Exception as e:
-        return False, {"reason": f"读取状态文件失败: {str(e)}"}
+        return False, {"reason": f"Failed to read state file: {str(e)}"}
 
 
 @simulation_bp.route('/prepare', methods=['POST'])
 def prepare_simulation():
     """
-    准备模拟环境（异步任务，LLM智能生成所有参数）
+    Prepare the simulation environment (async task; all parameters generated by the LLM)
     
-    这是一个耗时操作，接口会立即返回task_id，
+    This is a long-running operation. The API returns `task_id` immediately,
     使用 GET /api/simulation/prepare/status 查询进度
     
     特性：
@@ -375,16 +375,16 @@ def prepare_simulation():
     4. LLM智能生成模拟配置（带重试机制）
     5. 保存配置文件和预设脚本
     
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",                   // 必填，模拟ID
+            "simulation_id": "sim_xxxx",                   // required, simulation ID
             "entity_types": ["Student", "PublicFigure"],  // 可选，指定实体类型
             "use_llm_for_profiles": true,                 // 可选，是否用LLM生成人设
             "parallel_profile_count": 5,                  // 可选，并行生成人设数量，默认5
-            "force_regenerate": false                     // 可选，强制重新生成，默认false
+            "force_regenerate": false                     // optional, force regeneration，默认false
         }
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -408,7 +408,7 @@ def prepare_simulation():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
         
         manager = SimulationManager()
@@ -417,7 +417,7 @@ def prepare_simulation():
         if not state:
             return jsonify({
                 "success": False,
-                "error": f"模拟不存在: {simulation_id}"
+                "error": f"Simulation not found: {simulation_id}"
             }), 404
         
         # 检查是否强制重新生成
@@ -426,11 +426,11 @@ def prepare_simulation():
         
         # 检查是否已经准备完成（避免重复生成）
         if not force_regenerate:
-            logger.debug(f"检查模拟 {simulation_id} 是否已准备完成...")
+            logger.debug(f"检查Simulation {simulation_id} 是否已准备完成...")
             is_prepared, prepare_info = _check_simulation_prepared(simulation_id)
             logger.debug(f"检查结果: is_prepared={is_prepared}, prepare_info={prepare_info}")
             if is_prepared:
-                logger.info(f"模拟 {simulation_id} 已准备完成，跳过重复生成")
+                logger.info(f"Simulation {simulation_id} 已准备完成，跳过重复生成")
                 return jsonify({
                     "success": True,
                     "data": {
@@ -442,14 +442,14 @@ def prepare_simulation():
                     }
                 })
             else:
-                logger.info(f"模拟 {simulation_id} 未准备完成，将启动准备任务")
+                logger.info(f"Simulation {simulation_id} 未准备完成，将启动准备任务")
         
         # 从项目获取必要信息
         project = ProjectManager.get_project(state.project_id)
         if not project:
             return jsonify({
                 "success": False,
-                "error": f"项目不存在: {state.project_id}"
+                "error": f"Project not found: {state.project_id}"
             }), 404
         
         # 获取模拟需求
@@ -457,7 +457,7 @@ def prepare_simulation():
         if not simulation_requirement:
             return jsonify({
                 "success": False,
-                "error": "项目缺少模拟需求描述 (simulation_requirement)"
+                "error": "项目Missing simulation requirement description (simulation_requirement)"
             }), 400
         
         # 获取文档文本
@@ -643,13 +643,13 @@ def get_prepare_status():
     1. 通过task_id查询正在进行的任务进度
     2. 通过simulation_id检查是否已有完成的准备工作
     
-    请求（JSON）：
+    Request (JSON):
         {
             "task_id": "task_xxxx",          // 可选，prepare返回的task_id
-            "simulation_id": "sim_xxxx"      // 可选，模拟ID（用于检查已完成的准备）
+            "simulation_id": "sim_xxxx"      // optional, simulation ID（用于检查已完成的准备）
         }
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -702,7 +702,7 @@ def get_prepare_status():
                 })
             return jsonify({
                 "success": False,
-                "error": "请提供 task_id 或 simulation_id"
+                "error": "Please provide task_id or simulation_id"
             }), 400
         
         task_manager = TaskManager()
@@ -728,7 +728,7 @@ def get_prepare_status():
             
             return jsonify({
                 "success": False,
-                "error": f"任务不存在: {task_id}"
+                "error": f"Task not found: {task_id}"
             }), 404
         
         task_dict = task.to_dict()
@@ -740,7 +740,7 @@ def get_prepare_status():
         })
         
     except Exception as e:
-        logger.error(f"查询任务状态失败: {str(e)}")
+        logger.error(f"Failed to query task status: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e)
@@ -757,7 +757,7 @@ def get_simulation(simulation_id: str):
         if not state:
             return jsonify({
                 "success": False,
-                "error": f"模拟不存在: {simulation_id}"
+                "error": f"Simulation not found: {simulation_id}"
             }), 404
         
         result = state.to_dict()
@@ -785,7 +785,7 @@ def list_simulations():
     """
     列出所有模拟
     
-    Query参数：
+    Query parameters:
         project_id: 按项目ID过滤（可选）
     """
     try:
@@ -817,7 +817,7 @@ def _get_report_id_for_simulation(simulation_id: str) -> str:
     如果有多个则返回最新的（按 created_at 排序）
     
     Args:
-        simulation_id: 模拟ID
+        simulation_id: simulation ID
         
     Returns:
         report_id 或 None
@@ -875,10 +875,10 @@ def get_simulation_history():
     
     用于首页历史项目展示，返回包含项目名称、描述等丰富信息的模拟列表
     
-    Query参数：
+    Query parameters:
         limit: 返回数量限制（默认20）
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": [
@@ -987,7 +987,7 @@ def get_simulation_profiles(simulation_id: str):
     """
     获取模拟的Agent Profile
     
-    Query参数：
+    Query parameters:
         platform: 平台类型（reddit/twitter，默认reddit）
     """
     try:
@@ -1030,10 +1030,10 @@ def get_simulation_profiles_realtime(simulation_id: str):
     - 适用于生成过程中的实时查看
     - 返回额外的元数据（如文件修改时间、是否正在生成等）
     
-    Query参数：
+    Query parameters:
         platform: 平台类型（reddit/twitter，默认reddit）
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -1061,7 +1061,7 @@ def get_simulation_profiles_realtime(simulation_id: str):
         if not os.path.exists(sim_dir):
             return jsonify({
                 "success": False,
-                "error": f"模拟不存在: {simulation_id}"
+                "error": f"Simulation not found: {simulation_id}"
             }), 404
         
         # 确定文件路径
@@ -1070,7 +1070,7 @@ def get_simulation_profiles_realtime(simulation_id: str):
         else:
             profiles_file = os.path.join(sim_dir, "twitter_profiles.csv")
         
-        # 检查文件是否存在
+        # Check whether files exist
         file_exists = os.path.exists(profiles_file)
         profiles = []
         file_modified_at = None
@@ -1141,7 +1141,7 @@ def get_simulation_config_realtime(simulation_id: str):
     - 返回额外的元数据（如文件修改时间、是否正在生成等）
     - 即使配置还没生成完也能返回部分信息
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -1164,13 +1164,13 @@ def get_simulation_config_realtime(simulation_id: str):
         if not os.path.exists(sim_dir):
             return jsonify({
                 "success": False,
-                "error": f"模拟不存在: {simulation_id}"
+                "error": f"Simulation not found: {simulation_id}"
             }), 404
         
         # 配置文件路径
         config_file = os.path.join(sim_dir, "simulation_config.json")
         
-        # 检查文件是否存在
+        # Check whether files exist
         file_exists = os.path.exists(config_file)
         config = None
         file_modified_at = None
@@ -1374,9 +1374,9 @@ def generate_profiles():
     """
     直接从图谱生成OASIS Agent Profile（不创建模拟）
     
-    请求（JSON）：
+    Request (JSON):
         {
-            "graph_id": "mirofish_xxxx",     // 必填
+            "graph_id": "mirofish_xxxx",     // required
             "entity_types": ["Student"],      // 可选
             "use_llm": true,                  // 可选
             "platform": "reddit"              // 可选
@@ -1389,7 +1389,7 @@ def generate_profiles():
         if not graph_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 graph_id"
+                "error": "Please provide graph_id"
             }), 400
         
         entity_types = data.get('entity_types')
@@ -1448,9 +1448,9 @@ def start_simulation():
     """
     开始运行模拟
 
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",          // 必填，模拟ID
+            "simulation_id": "sim_xxxx",          // required, simulation ID
             "platform": "parallel",                // 可选: twitter / reddit / parallel (默认)
             "max_rounds": 100,                     // 可选: 最大模拟轮数，用于截断过长的模拟
             "enable_graph_memory_update": false,   // 可选: 是否将Agent活动动态更新到Zep图谱记忆
@@ -1469,7 +1469,7 @@ def start_simulation():
         - 需要模拟关联的项目有有效的 graph_id
         - 采用批量更新机制，减少API调用次数
 
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -1491,7 +1491,7 @@ def start_simulation():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
 
         platform = data.get('platform', 'parallel')
@@ -1527,7 +1527,7 @@ def start_simulation():
         if not state:
             return jsonify({
                 "success": False,
-                "error": f"模拟不存在: {simulation_id}"
+                "error": f"Simulation not found: {simulation_id}"
             }), 404
 
         force_restarted = False
@@ -1546,7 +1546,7 @@ def start_simulation():
                         # 进程确实在运行
                         if force:
                             # 强制模式：停止运行中的模拟
-                            logger.info(f"强制模式：停止运行中的模拟 {simulation_id}")
+                            logger.info(f"强制模式：停止运行中的Simulation {simulation_id}")
                             try:
                                 SimulationRunner.stop_simulation(simulation_id)
                             except Exception as e:
@@ -1566,7 +1566,7 @@ def start_simulation():
                     force_restarted = True
 
                 # 进程不存在或已结束，重置状态为 ready
-                logger.info(f"模拟 {simulation_id} 准备工作已完成，重置状态为 ready（原状态: {state.status.value}）")
+                logger.info(f"Simulation {simulation_id} 准备工作已完成，重置状态为 ready（原状态: {state.status.value}）")
                 state.status = SimulationStatus.READY
                 manager._save_simulation_state(state)
             else:
@@ -1641,12 +1641,12 @@ def stop_simulation():
     """
     停止模拟
     
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx"  // 必填，模拟ID
+            "simulation_id": "sim_xxxx"  // required, simulation ID
         }
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -1663,7 +1663,7 @@ def stop_simulation():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
         
         run_state = SimulationRunner.stop_simulation(simulation_id)
@@ -1702,7 +1702,7 @@ def get_run_status(simulation_id: str):
     """
     获取模拟运行实时状态（用于前端轮询）
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -1762,10 +1762,10 @@ def get_run_status_detail(simulation_id: str):
     
     用于前端展示实时动态
     
-    Query参数：
+    Query parameters:
         platform: 过滤平台（twitter/reddit，可选）
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -1861,14 +1861,14 @@ def get_simulation_actions(simulation_id: str):
     """
     获取模拟中的Agent动作历史
     
-    Query参数：
+    Query parameters:
         limit: 返回数量（默认100）
         offset: 偏移量（默认0）
         platform: 过滤平台（twitter/reddit）
         agent_id: 过滤Agent ID
         round_num: 过滤轮次
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -1917,7 +1917,7 @@ def get_simulation_timeline(simulation_id: str):
     
     用于前端展示进度条和时间线视图
     
-    Query参数：
+    Query parameters:
         start_round: 起始轮次（默认0）
         end_round: 结束轮次（默认全部）
     
@@ -1984,7 +1984,7 @@ def get_simulation_posts(simulation_id: str):
     """
     获取模拟中的帖子
     
-    Query参数：
+    Query parameters:
         platform: 平台类型（twitter/reddit）
         limit: 返回数量（默认50）
         offset: 偏移量
@@ -2062,7 +2062,7 @@ def get_simulation_comments(simulation_id: str):
     """
     获取模拟中的评论（仅Reddit）
     
-    Query参数：
+    Query parameters:
         post_id: 过滤帖子ID（可选）
         limit: 返回数量
         offset: 偏移量
@@ -2141,11 +2141,11 @@ def interview_agent():
 
     注意：此功能需要模拟环境处于运行状态（完成模拟循环后进入等待命令模式）
 
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",       // 必填，模拟ID
-            "agent_id": 0,                     // 必填，Agent ID
-            "prompt": "你对这件事有什么看法？",  // 必填，采访问题
+            "simulation_id": "sim_xxxx",       // required, simulation ID
+            "agent_id": 0,                     // required，Agent ID
+            "prompt": "你对这件事有什么看法？",  // required，采访问题
             "platform": "twitter",             // 可选，指定平台（twitter/reddit）
                                                // 不指定时：双平台模拟同时采访两个平台
             "timeout": 60                      // 可选，超时时间（秒），默认60
@@ -2197,7 +2197,7 @@ def interview_agent():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
         
         if agent_id is None:
@@ -2270,10 +2270,10 @@ def interview_agents_batch():
 
     注意：此功能需要模拟环境处于运行状态
 
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",       // 必填，模拟ID
-            "interviews": [                    // 必填，采访列表
+            "simulation_id": "sim_xxxx",       // required, simulation ID
+            "interviews": [                    // required，采访列表
                 {
                     "agent_id": 0,
                     "prompt": "你对A有什么看法？",
@@ -2289,7 +2289,7 @@ def interview_agents_batch():
             "timeout": 120                     // 可选，超时时间（秒），默认120
         }
 
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -2318,7 +2318,7 @@ def interview_agents_batch():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
 
         if not interviews or not isinstance(interviews, list):
@@ -2408,16 +2408,16 @@ def interview_all_agents():
 
     注意：此功能需要模拟环境处于运行状态
 
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",            // 必填，模拟ID
-            "prompt": "你对这件事整体有什么看法？",  // 必填，采访问题（所有Agent使用相同问题）
+            "simulation_id": "sim_xxxx",            // required, simulation ID
+            "prompt": "你对这件事整体有什么看法？",  // required，采访问题（所有Agent使用相同问题）
             "platform": "reddit",                   // 可选，指定平台（twitter/reddit）
                                                     // 不指定时：双平台模拟每个Agent同时采访两个平台
             "timeout": 180                          // 可选，超时时间（秒），默认180
         }
 
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -2445,7 +2445,7 @@ def interview_all_agents():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
 
         if not prompt:
@@ -2511,16 +2511,16 @@ def get_interview_history():
 
     从模拟数据库中读取所有Interview记录
 
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",  // 必填，模拟ID
+            "simulation_id": "sim_xxxx",  // required, simulation ID
             "platform": "reddit",          // 可选，平台类型（reddit/twitter）
                                            // 不指定则返回两个平台的所有历史
             "agent_id": 0,                 // 可选，只获取该Agent的采访历史
             "limit": 100                   // 可选，返回数量，默认100
         }
 
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -2549,7 +2549,7 @@ def get_interview_history():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
 
         history = SimulationRunner.get_interview_history(
@@ -2583,12 +2583,12 @@ def get_env_status():
 
     检查模拟环境是否存活（可以接收Interview命令）
 
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx"  // 必填，模拟ID
+            "simulation_id": "sim_xxxx"  // required, simulation ID
         }
 
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -2608,7 +2608,7 @@ def get_env_status():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
 
         env_alive = SimulationRunner.check_env_alive(simulation_id)
@@ -2651,13 +2651,13 @@ def close_simulation_env():
     注意：这不同于 /stop 接口，/stop 会强制终止进程，
     而此接口会让模拟优雅地关闭环境并退出。
     
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",  // 必填，模拟ID
+            "simulation_id": "sim_xxxx",  // required, simulation ID
             "timeout": 30                  // 可选，超时时间（秒），默认30
         }
     
-    返回：
+    Returns:
         {
             "success": true,
             "data": {
@@ -2676,7 +2676,7 @@ def close_simulation_env():
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 simulation_id"
+                "error": "Please provide simulation_id"
             }), 400
         
         result = SimulationRunner.close_simulation_env(
