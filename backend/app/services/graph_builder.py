@@ -329,7 +329,7 @@ class GraphBuilderService:
                             episode_uuids.append(ep_uuid)
                 
                 # Avoid sending requests too quickly
-                time.sleep(1)
+                time.sleep(0.5)
                 
             except Exception as e:
                 if progress_callback:
@@ -389,7 +389,7 @@ class GraphBuilderService:
                 )
             
             if pending_episodes:
-                time.sleep(3)  # Check every 3 seconds.
+                time.sleep(1.5)  # Check every 1.5 seconds.
         
         if progress_callback:
             progress_callback(f"Processing complete: {completed_count}/{total_episodes}", 1.0)
