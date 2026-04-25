@@ -84,13 +84,22 @@ def main():
         print("No rows found in CSV")
         sys.exit(1)
 
-    header_line = raw_lines[0]
+    # Skip leading blank/comment lines to find the real CSV header
+    header_idx = next(
+        (i for i, l in enumerate(raw_lines) if l.strip() and not l.lstrip().startswith("#")),
+        None,
+    )
+    if header_idx is None:
+        print("No header found in CSV")
+        sys.exit(1)
+
+    header_line = raw_lines[header_idx]
     fieldnames = [f.strip() for f in header_line.split(",")]
 
     # Separate data rows from trailing summary lines
     data_lines = []
     summary_lines = []
-    for line in raw_lines[1:]:
+    for line in raw_lines[header_idx + 1:]:
         stripped = line.strip()
         if not stripped:
             continue

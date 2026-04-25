@@ -5,6 +5,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import io
+
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -35,7 +37,7 @@ def parse_csv(path: Path):
         else:
             data_lines.append(line)
 
-    df = pd.read_csv(pd.io.common.StringIO("\n".join(data_lines)))
+    df = pd.read_csv(io.StringIO("\n".join(data_lines)))
     df["latest_chart_time"] = pd.to_datetime(df["latest_chart_time"])
     df = df.sort_values("latest_chart_time").reset_index(drop=True)
 
@@ -96,7 +98,6 @@ def plot_candles(df: pd.DataFrame, interval: pd.Timedelta, out_path: Path,
                     label="Actual" if i == 0 else None)
 
         # Predicted overlaid on same x, lighter and slightly narrower
-        pred_mid = (row["predicted_low"] + row["predicted_high"]) / 2
         draw_candle(ax, x, row["predicted_low"], row["predicted_high"],
                     row["predicted_low"], row["predicted_high"],
                     color="#FDD835", width=0.35, alpha=0.55,
@@ -159,10 +160,10 @@ def compute_report(df: pd.DataFrame, meta: dict, interval: pd.Timedelta, out_pat
     lines.append(f"  Signed Rel Err High : {meta.get('b_high', 'N/A')}")
     lines.append(f"  Total Runtime  : {meta.get('total_runtime_mins', 'N/A')} min")
 
-    avg_agents = df["agent_count"].mean() if "agent_count" in df.columns else "N/A"
-    avg_rounds = df["simulation_rounds"].mean() if "simulation_rounds" in df.columns else "N/A"
-    lines.append(f"  Avg Agents     : {avg_agents:.1f}" if isinstance(avg_agents, float) else f"  Avg Agents     : {avg_agents}")
-    lines.append(f"  Avg Sim Rounds : {avg_rounds:.1f}" if isinstance(avg_rounds, float) else f"  Avg Sim Rounds : {avg_rounds}")
+    avg_agents = float(df["agent_count"].mean()) if "agent_count" in df.columns else None
+    avg_rounds = float(df["simulation_rounds"].mean()) if "simulation_rounds" in df.columns else None
+    lines.append(f"  Avg Agents     : {avg_agents:.1f}" if avg_agents is not None else "  Avg Agents     : N/A")
+    lines.append(f"  Avg Sim Rounds : {avg_rounds:.1f}" if avg_rounds is not None else "  Avg Sim Rounds : N/A")
 
     da_pct = da.mean() * 100 if len(da) > 0 else 0
     lines.append(f"  Direction Acc  : {da_pct:.1f}%")
