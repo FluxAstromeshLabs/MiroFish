@@ -61,7 +61,7 @@ def _read_text_with_fallback(file_path: str) -> str:
 class FileParser:
     """File parser."""
     
-    SUPPORTED_EXTENSIONS = {'.pdf', '.md', '.markdown', '.txt'}
+    SUPPORTED_EXTENSIONS = {'.pdf', '.md', '.markdown', '.txt', '.csv'}
     
     @classmethod
     def extract_text(cls, file_path: str) -> str:
@@ -88,9 +88,9 @@ class FileParser:
             return cls._extract_from_pdf(file_path)
         elif suffix in {'.md', '.markdown'}:
             return cls._extract_from_md(file_path)
-        elif suffix == '.txt':
+        elif suffix in {'.txt', '.csv'}:
             return cls._extract_from_txt(file_path)
-        
+
         raise ValueError(f"Unable to handle file type: {suffix}")
     
     @staticmethod

@@ -234,7 +234,8 @@ class SimulationManager:
         defined_entity_types: Optional[List[str]] = None,
         use_llm_for_profiles: bool = True,
         progress_callback: Optional[callable] = None,
-        parallel_profile_count: int = 3
+        parallel_profile_count: int = 3,
+        max_agents: Optional[int] = None
     ) -> SimulationState:
         """
         Prepare the simulation environment end-to-end.
@@ -283,17 +284,21 @@ class SimulationManager:
                 enrich_with_edges=True
             )
             
+            if max_agents and max_agents > 0:
+                filtered.entities = filtered.entities[:max_agents]
+                filtered.filtered_count = len(filtered.entities)
+
             state.entities_count = filtered.filtered_count
             state.entity_types = list(filtered.entity_types)
-            
+
             if progress_callback:
                 progress_callback(
-                    "reading", 100, 
+                    "reading", 100,
                     f"Done, found {filtered.filtered_count} entities",
                     current=filtered.filtered_count,
                     total=filtered.filtered_count
                 )
-            
+
             if filtered.filtered_count == 0:
                 state.status = SimulationStatus.FAILED
                 state.error = "No matching entities were found. Check whether the graph was built correctly."

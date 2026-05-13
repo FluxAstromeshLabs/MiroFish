@@ -25,8 +25,8 @@ from .zep_entity_reader import EntityNode, ZepEntityReader
 
 logger = get_logger('mirofish.simulation_config')
 
-# China schedule configuration (Beijing time)
-CHINA_TIMEZONE_CONFIG = {
+# Default schedule configuration (timezone-neutral; override with SIMULATION_TIMEZONE)
+DEFAULT_TIMEZONE_CONFIG = {
     # late-night hours (almost no activity)
     "dead_hours": [0, 1, 2, 3, 4, 5],
     # morning hours (waking up gradually)
@@ -80,9 +80,9 @@ class AgentActivityConfig:
     influence_weight: float = 1.0
 
 
-@dataclass  
+@dataclass
 class TimeSimulationConfig:
-    """Time simulation config based on typical China schedules"""
+    """Time simulation config based on configurable timezone schedules"""
     # total simulation duration (simulated hours)
     total_simulation_hours: int = 72  # default to 72 simulated hours (3 days)
     
@@ -93,10 +93,10 @@ class TimeSimulationConfig:
     agents_per_hour_min: int = 5
     agents_per_hour_max: int = 20
     
-    # peak period (19:00-22:00, the most active time for typical China schedules)
+    # peak period (19:00-22:00, the most active time for typical daily schedules)
     peak_hours: List[int] = field(default_factory=lambda: [19, 20, 21, 22])
     peak_activity_multiplier: float = 1.5
-    
+
     # off-peak period (00:00-05:00, almost no activity)
     off_peak_hours: List[int] = field(default_factory=lambda: [0, 1, 2, 3, 4, 5])
     off_peak_activity_multiplier: float = 0.05  # very low activity in the early morning
@@ -213,8 +213,8 @@ class SimulationConfigGenerator:
     # maximum context length
     MAX_CONTEXT_LENGTH = 50000
     # number of Agents generated per batch
-    AGENTS_PER_BATCH = 15
-    
+    AGENTS_PER_BATCH: int  # assigned in __init__
+
     # context truncation lengths for each step (characters)
     TIME_CONFIG_CONTEXT_LENGTH = 10000   # time config
     EVENT_CONFIG_CONTEXT_LENGTH = 8000   # event config
@@ -231,14 +231,16 @@ class SimulationConfigGenerator:
         self.api_key = api_key or Config.LLM_API_KEY
         self.base_url = base_url or Config.LLM_BASE_URL
         self.model_name = model_name or Config.LLM_MODEL_NAME
-        
+        self.timezone = Config.SIMULATION_TIMEZONE
+
         if not self.api_key:
             raise ValueError("LLM_API_KEY is not configured")
-        
+
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url
         )
+        self.AGENTS_PER_BATCH = Config.SIMULATION_AGENT_COUNT
     
     def generate_config(
         self,
@@ -356,21 +358,21 @@ class SimulationConfigGenerator:
         if enable_twitter:
             twitter_config = PlatformConfig(
                 platform="twitter",
-                recency_weight=0.4,
-                popularity_weight=0.3,
-                relevance_weight=0.3,
-                viral_threshold=10,
-                echo_chamber_strength=0.5
+                recency_weight=Config.TWITTER_RECENCY_WEIGHT,
+                popularity_weight=Config.TWITTER_POPULARITY_WEIGHT,
+                relevance_weight=Config.TWITTER_RELEVANCE_WEIGHT,
+                viral_threshold=Config.TWITTER_VIRAL_THRESHOLD,
+                echo_chamber_strength=Config.TWITTER_ECHO_CHAMBER_STRENGTH,
             )
-        
+
         if enable_reddit:
             reddit_config = PlatformConfig(
                 platform="reddit",
-                recency_weight=0.3,
-                popularity_weight=0.4,
-                relevance_weight=0.3,
-                viral_threshold=15,
-                echo_chamber_strength=0.6
+                recency_weight=Config.REDDIT_RECENCY_WEIGHT,
+                popularity_weight=Config.REDDIT_POPULARITY_WEIGHT,
+                relevance_weight=Config.REDDIT_RELEVANCE_WEIGHT,
+                viral_threshold=Config.REDDIT_VIRAL_THRESHOLD,
+                echo_chamber_strength=Config.REDDIT_ECHO_CHAMBER_STRENGTH,
             )
         
         # Build final parameters
@@ -563,7 +565,7 @@ class SimulationConfigGenerator:
 Generate time configuration JSON.
 
 ### Basic principles (for reference only; adjust based on the event and participating groups):
-- The user population is assumed to follow Beijing-time daily routines.
+- The user population is assumed to follow typical daily routines in the simulation timezone ({self.timezone}).
 - Almost no activity from 00:00-05:00 (activity multiplier 0.05)
 - Activity ramps up from 06:00-08:00 (activity multiplier 0.4)
 - Moderate activity from 09:00-18:00 (activity multiplier 0.7)
@@ -600,7 +602,7 @@ Field notes:
 - work_hours (int array): working hours
 - reasoning (string): briefly explain why this configuration was chosen"""
 
-        system_prompt = "You are a social media simulation expert. Return pure JSON. The time configuration should follow typical China daily routines."
+        system_prompt = f"You are a social media simulation expert. Return pure JSON. The time configuration should follow typical daily routines for the simulation timezone ({self.timezone})."
         
         try:
             return self._call_llm_with_retry(prompt, system_prompt)
@@ -609,7 +611,7 @@ Field notes:
             return self._get_default_time_config(num_entities)
     
     def _get_default_time_config(self, num_entities: int) -> Dict[str, Any]:
-        """Get the default time config for typical China daily routines"""
+        """Get the default time config for typical daily routines"""
         return {
             "total_simulation_hours": 72,
             "minutes_per_round": 60,  # 1 hour per round to speed up simulated time
@@ -619,7 +621,7 @@ Field notes:
             "off_peak_hours": [0, 1, 2, 3, 4, 5],
             "morning_hours": [6, 7, 8],
             "work_hours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-            "reasoning": "Use the default China routine configuration (1 hour per round)"
+            "reasoning": f"Use the default schedule configuration for timezone {self.timezone} (1 hour per round)"
         }
     
     def _parse_time_config(self, result: Dict[str, Any], num_entities: int) -> TimeSimulationConfig:
@@ -854,7 +856,7 @@ Simulation requirement: {simulation_requirement}
 
 ## Task
 Generate an activity configuration for each entity. Keep in mind:
-- **Time behavior should follow typical China routines**: almost no activity from 00:00-05:00, peak activity from 19:00-22:00
+- **Time behavior should follow typical daily routines**: almost no activity from 00:00-05:00, peak activity from 19:00-22:00
 - **Official institutions** (University/GovernmentAgency): low activity (0.1-0.3), active during work hours (9-17), slow response (60-240 min), high influence (2.5-3.0)
 - **Media** (MediaOutlet): medium activity (0.4-0.6), active all day (8-23), fast response (5-30 min), high influence (2.0-2.5)
 - **Individuals** (Student/Person/Alumni): high activity (0.6-0.9), mainly active in the evening (18-23), fast response (1-15 min), lower influence (0.8-1.2)
@@ -868,7 +870,7 @@ Return JSON only (no markdown):
             "activity_level": <0.0-1.0>,
             "posts_per_hour": <posting frequency>,
             "comments_per_hour": <comment frequency>,
-            "active_hours": [<active hour list, considering typical China routines>],
+            "active_hours": [<active hour list, considering typical daily routines>],
             "response_delay_min": <minimum response delay in minutes>,
             "response_delay_max": <maximum response delay in minutes>,
             "sentiment_bias": <-1.0 to 1.0>,
@@ -879,7 +881,7 @@ Return JSON only (no markdown):
     ]
 }}"""
 
-        system_prompt = "You are a social media behavior analysis expert. Return pure JSON. The configuration should follow typical China daily routines."
+        system_prompt = f"You are a social media behavior analysis expert. Return pure JSON. The configuration should follow typical daily routines for the simulation timezone ({self.timezone})."
         
         try:
             result = self._call_llm_with_retry(prompt, system_prompt)
@@ -918,7 +920,7 @@ Return JSON only (no markdown):
         return configs
     
     def _generate_agent_config_by_rule(self, entity: EntityNode) -> Dict[str, Any]:
-        """Generate a single Agent config with rule-based defaults aligned to common China schedules."""
+        """Generate a single Agent config with rule-based defaults aligned to common daily schedules."""
         entity_type = (entity.get_entity_type() or "Unknown").lower()
         
         if entity_type in ["university", "governmentagency", "ngo"]:

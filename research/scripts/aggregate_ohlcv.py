@@ -60,9 +60,12 @@ def bucket_start_ms(ts_ms: int, bucket: dict) -> int:
     return (ts_ms // period_ms) * period_ms
 
 
-DATA_DIR = os.path.join(
-    os.path.dirname(__file__),
-    "..", "..", "..", "exchange-connectors", "marketdata", "data", "binance", "btc", "formatted",
+DATA_DIR = os.environ.get(
+    "BTC_DATA_DIR",
+    os.path.join(
+        os.path.dirname(__file__),
+        "..", "..", "..", "Documents", "exchange-connectors", "marketdata", "data", "binance", "btc", "formatted",
+    ),
 )
 
 

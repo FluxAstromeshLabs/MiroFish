@@ -38,16 +38,19 @@ class Config:
     # File upload settings.
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '../uploads')
-    ALLOWED_EXTENSIONS = {'pdf', 'md', 'txt', 'markdown'}
+    ALLOWED_EXTENSIONS = {'pdf', 'md', 'txt', 'markdown', 'csv'}
     
     # Text processing settings.
     DEFAULT_CHUNK_SIZE = 500  # Default chunk size.
     DEFAULT_CHUNK_OVERLAP = 50  # Default overlap size.
     
     # OASIS simulation settings.
+    SIMULATION_TIMEZONE = os.environ.get('SIMULATION_TIMEZONE', 'UTC')
     OASIS_DEFAULT_MAX_ROUNDS = int(os.environ.get('OASIS_DEFAULT_MAX_ROUNDS', '10'))
     OASIS_SIMULATION_DATA_DIR = os.path.join(os.path.dirname(__file__), '../uploads/simulations')
-    
+    SIMULATION_AGENT_COUNT = int(os.environ.get('SIMULATION_AGENT_COUNT', '15'))
+    SIMULATION_PROFILE_PARALLEL_COUNT = int(os.environ.get('SIMULATION_PROFILE_PARALLEL_COUNT', '5'))
+
     # Available OASIS platform actions.
     OASIS_TWITTER_ACTIONS = [
         'CREATE_POST', 'LIKE_POST', 'REPOST', 'FOLLOW', 'DO_NOTHING', 'QUOTE_POST'
@@ -58,6 +61,20 @@ class Config:
         'TREND', 'REFRESH', 'DO_NOTHING', 'FOLLOW', 'MUTE'
     ]
     
+    # Twitter platform weights.
+    TWITTER_VIRAL_THRESHOLD = int(os.environ.get('TWITTER_VIRAL_THRESHOLD', '10'))
+    TWITTER_ECHO_CHAMBER_STRENGTH = float(os.environ.get('TWITTER_ECHO_CHAMBER_STRENGTH', '0.5'))
+    TWITTER_RECENCY_WEIGHT = float(os.environ.get('TWITTER_RECENCY_WEIGHT', '0.4'))
+    TWITTER_POPULARITY_WEIGHT = float(os.environ.get('TWITTER_POPULARITY_WEIGHT', '0.3'))
+    TWITTER_RELEVANCE_WEIGHT = float(os.environ.get('TWITTER_RELEVANCE_WEIGHT', '0.3'))
+
+    # Reddit platform weights.
+    REDDIT_VIRAL_THRESHOLD = int(os.environ.get('REDDIT_VIRAL_THRESHOLD', '15'))
+    REDDIT_ECHO_CHAMBER_STRENGTH = float(os.environ.get('REDDIT_ECHO_CHAMBER_STRENGTH', '0.6'))
+    REDDIT_RECENCY_WEIGHT = float(os.environ.get('REDDIT_RECENCY_WEIGHT', '0.3'))
+    REDDIT_POPULARITY_WEIGHT = float(os.environ.get('REDDIT_POPULARITY_WEIGHT', '0.4'))
+    REDDIT_RELEVANCE_WEIGHT = float(os.environ.get('REDDIT_RELEVANCE_WEIGHT', '0.3'))
+
     # Report agent settings.
     REPORT_AGENT_MAX_TOOL_CALLS = int(os.environ.get('REPORT_AGENT_MAX_TOOL_CALLS', '5'))
     REPORT_AGENT_MAX_REFLECTION_ROUNDS = int(os.environ.get('REPORT_AGENT_MAX_REFLECTION_ROUNDS', '2'))

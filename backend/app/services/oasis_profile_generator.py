@@ -859,7 +859,7 @@ Important:
         use_llm: bool = True,
         progress_callback: Optional[callable] = None,
         graph_id: Optional[str] = None,
-        parallel_count: int = 5,
+        parallel_count: int = Config.SIMULATION_PROFILE_PARALLEL_COUNT,
         realtime_output_path: Optional[str] = None,
         output_platform: str = "reddit"
     ) -> List[OasisAgentProfile]:
@@ -1132,11 +1132,6 @@ Important:
         
         # English-to-English mapping.
         gender_map = {
-            "\u7537": "male",
-            "\u5973": "female",
-            "\u673a\u6784": "other",
-            "\u5176\u4ed6": "other",
-            # Already valid English values.
             "male": "male",
             "female": "female",
             "other": "other",
