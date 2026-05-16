@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from ..utils.logger import get_logger
 from ..config import Config
 import threading, uuid, requests, time, re
@@ -94,6 +94,28 @@ def pipeline_status(pipeline_task_id):
     return jsonify({"success": True, "data": task})
 
 
+@pipeline_bp.route('/stream/<pipeline_task_id>', methods=['GET'])
+def pipeline_stream(pipeline_task_id):
+    if pipeline_task_id not in _pipeline_tasks:
+        return jsonify({"success": False, "error": "Pipeline task not found"}), 404
+
+    def _generate():
+        import json
+        last_stage = None
+        while True:
+            task = _pipeline_tasks.get(pipeline_task_id, {})
+            stage = task.get("stage")
+            status = task.get("status")
+            if stage != last_stage:
+                last_stage = stage
+                yield f"data: {json.dumps({'stage': stage, 'status': status})}\n\n"
+            if status in ("completed", "failed"):
+                break
+            time.sleep(1)
+
+    return current_app.response_class(_generate(), mimetype="text/event-stream")
+
+
 @pipeline_bp.route('/backtest', methods=['POST'])
 def backtest():
     data = request.get_json() or {}
@@ -103,6 +125,9 @@ def backtest():
 
     if not simulation_id or actual_low is None or actual_high is None:
         return jsonify({"success": False, "error": "simulation_id, actual_low, and actual_high are required"}), 400
+
+    if actual_low >= actual_high:
+        return jsonify({"success": False, "error": "actual_low must be less than actual_high"}), 400
 
     base = f"http://localhost:{_PORT}"
 

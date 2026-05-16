@@ -230,6 +230,8 @@ def main():
     parser.add_argument("--actual-low", type=float, default=None)
     parser.add_argument("--actual-high", type=float, default=None)
     parser.add_argument("--predict-hours", type=int, default=1)
+    parser.add_argument("--unit", default="k", choices=["k", "raw"])
+    parser.add_argument("--divisor", type=int, default=1000)
     args = parser.parse_args()
 
     base = args.host
@@ -302,13 +304,18 @@ def main():
         pred_low = avg["range_low"]
         pred_high = avg["range_high"]
 
+        def _fmt(val, decimals=0):
+            if args.unit == "raw":
+                return f"${val:,.{decimals}f}"
+            return f"${val/args.divisor:,.{decimals}f}k"
+
         if args.backtest and args.actual_low is not None and args.actual_high is not None:
             actual_mid = (args.actual_low + args.actual_high) / 2
             in_range = pred_low <= actual_mid <= pred_high
             result = "IN RANGE ✓" if in_range else "OUT OF RANGE ✗"
-            print(f"Prediction: ${pred_low/1000:,.0f}k–${pred_high/1000:,.0f}k | Actual: ${actual_mid/1000:,.1f}k | {result}")
+            print(f"Prediction: {_fmt(pred_low)}–{_fmt(pred_high)} | Actual: {_fmt(actual_mid, 1)} | {result}")
         else:
-            print(f"Prediction: ${pred_low/1000:,.0f}k–${pred_high/1000:,.0f}k")
+            print(f"Prediction: {_fmt(pred_low)}–{_fmt(pred_high)}")
     else:
         print("[pipeline] No forecasts generated")
 

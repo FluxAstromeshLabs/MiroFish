@@ -8,8 +8,14 @@ Feed OHLCV + sentiment → simulate capital-weighted agents → extract price ra
 ## Current Phase
 
 Phase 1 ✅ done (cleanup, hardcodes removed, configurable agent count/timezone).
-Now on **Phase 2**: automate graph → simulate → predict → backtest into one pipeline call.
+Phase 2 ✅ done (pipeline automation: graph → simulate → interview → predict → backtest).
+Now on **Phase 3**: OHLCV + sentiment data bridge — feed real market data into Zep graph.
 Full roadmap: `.planning/ROADMAP.md` | Requirements: `.planning/REQUIREMENTS.md`
+
+**Phase 2 key scripts:**
+- `backend/scripts/run_pipeline.py` — end-to-end CLI: `python run_pipeline.py --backtest --actual-low X --actual-high Y`
+- `backend/scripts/run_trade.py` — research pipeline: seed.md → ontology → graph → simulate → interview → CSV
+- `backend/app/api/pipeline.py` — `POST /api/pipeline/run`, `POST /api/pipeline/backtest`, `GET /api/pipeline/status/<id>`, `GET /api/pipeline/stream/<id>` (SSE)
 
 ## Tech Stack
 
